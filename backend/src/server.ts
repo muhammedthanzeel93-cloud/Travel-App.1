@@ -3,8 +3,8 @@ import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import mongoose from 'mongoose';
-import { config } from './config/index.js';
-import { OperationsHubSocket } from './sockets/operationsHub.js';
+import { config } from './core/config/index.js';
+import { OperationsHubSocket } from './core/sockets/operationsHub.js';
 import apiRoutes from './routes/api.routes.js';
 
 const app = express();
@@ -31,6 +31,7 @@ app.use('/api/v1', apiRoutes);
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ONLINE',
+    architecture: 'Feature-Based Architecture',
     service: 'Travel Platform Core Gateway & Real-World Ticketing Engine',
     uptimeSeconds: process.uptime(),
     timestamp: new Date().toISOString()

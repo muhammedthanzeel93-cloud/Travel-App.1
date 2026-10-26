@@ -28,6 +28,21 @@ struct TravelPlatformApp: App {
                     .tabItem {
                         Label("4H Vault", systemImage: "ticket.fill")
                     }
+                
+                FlightBookingView()
+                    .tabItem {
+                        Label("Flights", systemImage: "airplane")
+                    }
+                
+                TrainBookingView()
+                    .tabItem {
+                        Label("Trains", systemImage: "tram.fill")
+                    }
+                
+                TravelFeedView()
+                    .tabItem {
+                        Label("Feed", systemImage: "photo.on.rectangle")
+                    }
             }
             .tint(.orange)
             .preferredColorScheme(.dark)

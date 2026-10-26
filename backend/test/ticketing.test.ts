@@ -1,5 +1,5 @@
-import { IataTicketingService } from '../src/services/iataTicketing.service.js';
-import { PrsRailTicketingService } from '../src/services/prsRailTicketing.service.js';
+import { IataTicketingService } from '../src/features/flights/iataTicketing.service.js';
+import { PrsRailTicketingService } from '../src/features/trains/prsRailTicketing.service.js';
 
 async function runTicketingVerificationSuite() {
   console.log('================================================================');
