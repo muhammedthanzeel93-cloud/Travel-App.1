@@ -141,7 +141,7 @@ export default function OfflineVaultPage() {
           <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
             <div className="p-6 rounded-2xl bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 border border-slate-800 space-y-6 shadow-2xl relative overflow-hidden">
               {/* Top Boarding Pass Header */}
-              <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-800">
                 <div className="flex items-center gap-2.5">
                   <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center">
                     {activePass.type === 'FLIGHT' ? <Plane className="w-5 h-5" /> : <Train className="w-5 h-5" />}

@@ -31,9 +31,9 @@ export class MultiChannelDispatcherService {
         emailPdfDelivered: true
       },
       messages: {
-        whatsapp: `🎫 *OFFICIAL TICKET CONFIRMATION*\nDear ${payload.travelerName}, your ${payload.ticketType} booking is CONFIRMED!\n\nPNR: *${payload.pnr}*\nRoute: *${payload.routeSummary}*\nSeat/Berth: *${payload.seatsOrBerths}*\nDep: ${new Date(payload.departureTime).toLocaleString()}\n\nOpen your TravelApp Vault to view your offline barcode anytime.`,
-        sms: `TRVL-APP: Booking confirmed! PNR ${payload.pnr}, ${payload.routeSummary}, Seat ${payload.seatsOrBerths}. Dep: ${new Date(payload.departureTime).toLocaleDateString()}. Check app for offline pass.`,
-        emailSubject: `Your Official ${payload.ticketType === 'FLIGHT' ? 'IATA E-Ticket & Boarding Pass' : 'Rail ERS Slip'} - PNR: ${payload.pnr}`
+        whatsapp: `🎫 *Travel Buddy - Official Ticket Confirmation*\nDear ${payload.travelerName}, your ${payload.ticketType} booking is CONFIRMED!\n\nPNR: *${payload.pnr}*\nRoute: *${payload.routeSummary}*\nSeat/Berth: *${payload.seatsOrBerths}*\nDeparture: ${new Date(payload.departureTime).toLocaleString()}\n\nOpen your Travel Buddy app vault to view your offline pass anytime.`,
+        sms: `Travel Buddy: Booking confirmed! PNR ${payload.pnr}, ${payload.routeSummary}, Seat ${payload.seatsOrBerths}. Dep: ${new Date(payload.departureTime).toLocaleDateString()}. Open offline vault in app.`,
+        emailSubject: `Travel Buddy - Official ${payload.ticketType === 'FLIGHT' ? 'IATA E-Ticket & Boarding Pass' : 'Rail ERS Slip'} (PNR: ${payload.pnr})`
       }
     };
 

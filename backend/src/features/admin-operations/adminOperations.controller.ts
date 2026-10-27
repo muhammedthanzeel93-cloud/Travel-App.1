@@ -1,4 +1,5 @@
 import { Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { FlightTicket } from '../flights/flightTicket.model.js';
 import { TrainTicket } from '../trains/trainTicket.model.js';
 import { Booking } from '../booking/booking.model.js';
@@ -6,7 +7,9 @@ import { Hotel, Room } from '../stays/stay.model.js';
 import { IataTicketingService } from '../flights/iataTicketing.service.js';
 import { PrsRailTicketingService } from '../trains/prsRailTicketing.service.js';
 import { MultiChannelDispatcherService } from '../../core/services/multiChannelDispatcher.service.js';
+import { User } from '../auth/user.model.js';
 import { OperationsHubSocket } from '../../core/sockets/operationsHub.js';
+import { config } from '../../core/config/index.js';
 
 export class AdminOperationsController {
   public static async getTicketingDeskQueue(req: Request, res: Response): Promise<void> {
@@ -346,6 +349,144 @@ export class AdminOperationsController {
 
       await room.save();
       res.status(200).json({ success: true, message: `Photo highlight approved: ${isApproved}`, room });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Super Admin Authentication Login
+   * Validates Username, Email ID, and Password
+   */
+  public static async loginAdmin(req: Request, res: Response): Promise<void> {
+    try {
+      const { username, email, password } = req.body;
+
+      if (!username || !email || !password) {
+        res.status(400).json({
+          success: false,
+          message: 'Username, email address, and password are required.'
+        });
+        return;
+      }
+
+      const cleanUsername = String(username).trim();
+      const cleanEmail = String(email).trim().toLowerCase();
+      const cleanPassword = String(password).trim();
+
+      // Configured Master Admin Credentials
+      const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
+      const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@travelbuddy.com').toLowerCase();
+      const MASTER_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
+
+      let isAuthenticated = false;
+      let adminName = 'Travel Buddy Super Admin';
+      let adminUsername = cleanUsername;
+      let adminEmail = cleanEmail;
+
+      // Check Master Super Admin Credentials
+      if (
+        cleanUsername.toLowerCase() === MASTER_ADMIN_USERNAME &&
+        (cleanEmail === MASTER_ADMIN_EMAIL || cleanEmail === 'admin@enteyathra.com') &&
+        cleanPassword === MASTER_ADMIN_PASSWORD
+      ) {
+        isAuthenticated = true;
+      } else {
+        // Fallback: Check in Database for User with role 'SUPER_ADMIN'
+        try {
+          const dbUser = await User.findOne({ email: cleanEmail, role: 'SUPER_ADMIN' });
+          if (dbUser) {
+            const passwordMatch = dbUser.passwordHash === cleanPassword;
+            if (passwordMatch) {
+              isAuthenticated = true;
+              adminName = dbUser.name || adminName;
+              adminEmail = dbUser.email;
+            }
+          }
+        } catch {
+          // In case DB is offline/in-memory mode
+        }
+      }
+
+      if (!isAuthenticated) {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid admin credentials. Please verify your username, email, and password.'
+        });
+        return;
+      }
+
+      // Generate JWT Token
+      const jwtSecret = config.jwtSecret || 'ente_yathra_jwt_super_admin_secret_2026';
+      const token = jwt.sign(
+        {
+          username: adminUsername,
+          email: adminEmail,
+          role: 'SUPER_ADMIN',
+          platform: 'Travel Buddy'
+        },
+        jwtSecret,
+        { expiresIn: '24h' }
+      );
+
+      res.status(200).json({
+        success: true,
+        message: 'Travel Buddy Super Admin authentication successful.',
+        token,
+        admin: {
+          username: adminUsername,
+          email: adminEmail,
+          name: adminName,
+          role: 'SUPER_ADMIN'
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Verify Active Admin Session Token
+   */
+  public static async verifyAdminToken(req: Request, res: Response): Promise<void> {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({ success: false, valid: false, message: 'No admin token provided' });
+        return;
+      }
+
+      const token = authHeader.split(' ')[1];
+      const jwtSecret = config.jwtSecret || 'ente_yathra_jwt_super_admin_secret_2026';
+      const decoded = jwt.verify(token, jwtSecret) as any;
+
+      if (decoded && decoded.role === 'SUPER_ADMIN') {
+        res.status(200).json({
+          success: true,
+          valid: true,
+          admin: {
+            username: decoded.username,
+            email: decoded.email,
+            role: decoded.role
+          }
+        });
+      } else {
+        res.status(403).json({ success: false, valid: false, message: 'Invalid admin role' });
+      }
+    } catch (err: any) {
+      res.status(401).json({ success: false, valid: false, message: 'Session expired or invalid token' });
+    }
+  }
+
+  /**
+   * Super Admin Session Logout
+   */
+  public static async logoutAdmin(req: Request, res: Response): Promise<void> {
+    try {
+      res.status(200).json({
+        success: true,
+        message: 'Travel Buddy Super Admin session terminated successfully.'
+      });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }

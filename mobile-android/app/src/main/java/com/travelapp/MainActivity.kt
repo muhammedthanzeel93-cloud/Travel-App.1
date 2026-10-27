@@ -21,11 +21,18 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TravelPlatformApp() {
     var currentTab by remember { mutableStateOf(0) }
 
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Travel Buddy", color = Color.White) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0F172A))
+            )
+        },
         bottomBar = {
             NavigationBar(containerColor = Color(0xFF0F172A)) {
                 NavigationBarItem(

@@ -3,6 +3,11 @@ import { AdminOperationsController } from './adminOperations.controller.js';
 
 const router = Router();
 
+// Admin Authentication Portal
+router.post('/login', AdminOperationsController.loginAdmin);
+router.get('/verify', AdminOperationsController.verifyAdminToken);
+router.post('/logout', AdminOperationsController.logoutAdmin);
+
 // Ticketing Desk Operations
 router.get('/operations/ticketing-desk', AdminOperationsController.getTicketingDeskQueue);
 router.post('/operations/ticketing-desk/issue-flight/:pnr', AdminOperationsController.issueFlightTicket);

@@ -31,8 +31,9 @@ app.use('/api/v1', apiRoutes);
 app.get('/health', (req: Request, res: Response) => {
   res.status(200).json({
     status: 'ONLINE',
+    app: 'Travel Buddy',
     architecture: 'Feature-Based Architecture',
-    service: 'Travel Platform Core Gateway & Real-World Ticketing Engine',
+    service: 'Travel Buddy Core Gateway & Real-World Ticketing Engine (IATA & PRS)',
     uptimeSeconds: process.uptime(),
     timestamp: new Date().toISOString()
   });
@@ -47,11 +48,28 @@ mongoose
     console.log('⚡ [BACKEND] Running in in-memory resilience mode for testing & simulated ticketing.');
   });
 
-// Start Server
-const PORT = config.port;
-server.listen(PORT, () => {
-  console.log(`🚀 [BACKEND ENGINE] Travel Platform API Server listening on http://localhost:${PORT}`);
-  console.log(`🎫 [SUPER ADMIN DESK] Listening for incoming orders on /api/v1/admin/operations/ticketing-desk`);
+// Start Server with Graceful Port Fallback
+let currentPort = Number(config.port) || 5000;
+
+function startServer(portToTry: number) {
+  server.listen(portToTry, () => {
+    console.log(`🚀 [BACKEND ENGINE] Travel Buddy API Server listening on http://localhost:${portToTry}`);
+    console.log(`🎫 [SUPER ADMIN DESK] Listening for incoming orders on /api/v1/admin/operations/ticketing-desk`);
+    console.log(`🛡️ [ADMIN AUTH] Super Admin sign-in route available at /api/v1/admin/login`);
+  });
+}
+
+server.on('error', (err: any) => {
+  if (err.code === 'EADDRINUSE') {
+    const nextPort = currentPort + 1;
+    console.warn(`⚠️ [BACKEND] Port ${currentPort} is already in use by another process. Automatically switching to port ${nextPort}...`);
+    currentPort = nextPort;
+    startServer(currentPort);
+  } else {
+    console.error('❌ [BACKEND SERVER ERROR]', err);
+  }
 });
+
+startServer(currentPort);
 
 export { app, server, io };

@@ -1,7 +1,7 @@
 {
-  "name": "travel-platform-backend",
+  "name": "ente-yathra-backend",
   "version": "1.0.0",
-  "description": "Travel Platform Backend with Real-World Aviation (IATA) and Railway (PRS) Ticketing Engine",
+  "description": "Travel Buddy Backend with Real-World Aviation (IATA) and Railway (PRS) Ticketing Engine",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

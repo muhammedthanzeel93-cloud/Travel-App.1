@@ -10,7 +10,6 @@ import {
   HardDrive,
   CheckCircle2,
   TrendingUp,
-  FileText,
   Building,
   ArrowRight,
   Clock,
@@ -28,27 +27,27 @@ export default function HomePage() {
         <div className="relative z-10 max-w-3xl space-y-4">
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400">
             <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>IATA Resolution 792 & IRCTC PRS Verified Architecture</span>
+            <span>IATA Resolution 792 &amp; IRCTC PRS Verified Platform</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-            Enterprise Travel Platform &amp;{' '}
-            <span className="bg-gradient-to-r from-blue-400 via-indigo-300 to-amber-400 bg-clip-text text-transparent">
+            Travel Buddy •{' '}
+            <span className="bg-gradient-to-r from-amber-400 via-orange-300 to-blue-400 bg-clip-text text-transparent">
               Super Admin Command Suite
             </span>
           </h1>
 
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Full-stack enterprise operations hub delivering real-world aviation (6-character PNRs, 13-digit IATA e-tickets, 2D BCBP barcodes), PRS rail quota ticketing, dynamic 10-day Dubai visa customizer, and 4-hour offline-first resilience.
+            Enterprise travel platform delivering real-world aviation (6-character PNRs, 13-digit IATA e-tickets, 2D BCBP barcodes), PRS rail quota ticketing, dynamic 10-day Dubai visa customizer, and 4-hour offline-first resilience.
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-4">
             <Link
-              href="/admin/operations/ticketing-desk"
+              href="/admin"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
             >
               <ShieldAlert className="w-4 h-4" />
-              Launch Super Admin Ticketing Desk
+              Admin Portal (Sign In)
             </Link>
 
             <Link
@@ -99,18 +98,18 @@ export default function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {/* Card 1: Super Admin Ticketing Desk */}
           <Link
-            href="/admin/operations/ticketing-desk"
+            href="/admin"
             className="group p-6 rounded-2xl bg-slate-900/60 border border-amber-500/30 hover:border-amber-400/80 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-amber-500/10"
           >
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
               <ShieldAlert className="w-6 h-6" />
             </div>
             <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition-colors flex items-center justify-between">
-              <span>Super Admin Ticketing Desk</span>
+              <span>Travel Buddy • Super Admin Desk</span>
               <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
             </h3>
             <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Real-time order reception with audio alert, APIS passport verification, 1-click issuance of 13-digit IATA e-tickets &amp; BCBP 2D barcodes.
+              Secure 3-field credential authentication, real-time order reception with audio alert, APIS passport verification, and 1-click issuance of 13-digit IATA e-tickets &amp; BCBP 2D barcodes.
             </p>
           </Link>
 
@@ -209,7 +208,7 @@ export default function HomePage() {
             Monitor flight sectors, rail charts, and hotel document verification desks independently.
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
           <Link
             href="/admin/operations/flights"
             className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"

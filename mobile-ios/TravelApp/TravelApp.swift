@@ -18,33 +18,37 @@ struct TravelPlatformApp: App {
 
     var body: some Scene {
         WindowGroup {
-            TabView {
-                MobileTicketingDeskView()
-                    .tabItem {
-                        Label("Admin Desk", systemImage: "shield.fill")
-                    }
+            NavigationStack {
+                TabView {
+                    MobileTicketingDeskView()
+                        .tabItem {
+                            Label("Admin Desk", systemImage: "shield.fill")
+                        }
 
-                MobileOfflineVaultView()
-                    .tabItem {
-                        Label("4H Vault", systemImage: "ticket.fill")
-                    }
-                
-                FlightBookingView()
-                    .tabItem {
-                        Label("Flights", systemImage: "airplane")
-                    }
-                
-                TrainBookingView()
-                    .tabItem {
-                        Label("Trains", systemImage: "tram.fill")
-                    }
-                
-                TravelFeedView()
-                    .tabItem {
-                        Label("Feed", systemImage: "photo.on.rectangle")
-                    }
+                    MobileOfflineVaultView()
+                        .tabItem {
+                            Label("4H Vault", systemImage: "ticket.fill")
+                        }
+                    
+                    FlightBookingView()
+                        .tabItem {
+                            Label("Flights", systemImage: "airplane")
+                        }
+                    
+                    TrainBookingView()
+                        .tabItem {
+                            Label("Trains", systemImage: "tram.fill")
+                        }
+                    
+                    TravelFeedView()
+                        .tabItem {
+                            Label("Feed", systemImage: "photo.on.rectangle")
+                        }
+                }
+                .tint(.orange)
+                .navigationTitle("Travel Buddy")
+                .navigationBarTitleDisplayMode(.inline)
             }
-            .tint(.orange)
             .preferredColorScheme(.dark)
         }
         .modelContainer(sharedModelContainer)

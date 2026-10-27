@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Travel Buddy</string>
+    <string name="admin_portal">Admin Portal</string>
+    <string name="flights">Flights</string>
+    <string name="trains">Trains</string>
+    <string name="vault">Offline Vault</string>
+</resources>

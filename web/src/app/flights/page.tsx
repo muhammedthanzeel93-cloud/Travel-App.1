@@ -162,7 +162,7 @@ export default function FlightsBookingPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left: Flight Details & Passenger APIS Form (8 Cols) */}
           <div className="lg:col-span-8 bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-6">
-            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
+            <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="space-y-1">
                 <span className="text-xs font-bold text-blue-400">{selectedFlight.airline} • {selectedFlight.flightNumber}</span>
                 <div className="text-base font-extrabold text-white flex items-center gap-2">

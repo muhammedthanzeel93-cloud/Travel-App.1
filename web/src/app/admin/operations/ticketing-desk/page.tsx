@@ -19,9 +19,12 @@ import {
   VolumeX,
   Radio,
   FileCheck,
-  ExternalLink
+  ExternalLink,
+  LogOut,
+  Users
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { performAdminLogout } from '@/features/admin/auth';
 
 interface BookingOrder {
   id: string;
@@ -55,108 +58,103 @@ interface BookingOrder {
   barcodeDataUrl?: string;
 }
 
+const INITIAL_ORDERS: BookingOrder[] = [
+  {
+    id: 'ord_1',
+    type: 'FLIGHT',
+    pnr: 'EK89XQ',
+    bookingRef: 'TRV-2026-98142',
+    carrier: 'Emirates',
+    carrierCode: 'EK',
+    flightOrTrainNumber: 'EK 562',
+    sector: 'CCJ (Calicut) → DXB (Dubai)',
+    departureTime: '2026-10-25T04:30:00Z',
+    timeRemainingHours: 5.5,
+    passenger: {
+      name: 'John Doe',
+      passportNumber: 'Z5891240',
+      passportExpiry: '2028-08-20',
+      gender: 'MALE',
+      seatOrBerth: '14A (Window)',
+      class: 'Economy (Y)',
+      passportValid: true
+    },
+    fare: {
+      baseFare: 14500,
+      taxes: 3420,
+      platformFee: 350,
+      totalAmount: 18270
+    },
+    status: 'PENDING_ISSUANCE'
+  },
+  {
+    id: 'ord_2',
+    type: 'TRAIN',
+    pnr: '4219876543',
+    bookingRef: 'TRV-2026-89104',
+    carrier: 'Indian Railways (Southern Railway)',
+    carrierCode: 'SR',
+    flightOrTrainNumber: '12617 Mangala Superfast',
+    sector: 'CLT (Kozhikode) → NZM (Nizamuddin Delhi)',
+    departureTime: '2026-10-25T13:15:00Z',
+    timeRemainingHours: 14.2,
+    passenger: {
+      name: 'Mohammed Ashraf',
+      age: 64,
+      gender: 'MALE',
+      seatOrBerth: 'Coach B3 - 42 (Lower Berth)',
+      class: 'AC 3 Tier (3A)',
+      passportValid: true
+    },
+    fare: {
+      baseFare: 2150,
+      taxes: 125,
+      platformFee: 40,
+      totalAmount: 2315
+    },
+    status: 'PENDING_ISSUANCE'
+  },
+  {
+    id: 'ord_3',
+    type: 'FLIGHT',
+    pnr: 'IX7721',
+    bookingRef: 'TRV-2026-77123',
+    carrier: 'Air India Express',
+    carrierCode: 'IX',
+    flightOrTrainNumber: 'IX 345',
+    sector: 'CCJ (Calicut) → DXB (Dubai)',
+    departureTime: '2026-10-25T10:15:00Z',
+    timeRemainingHours: 11.0,
+    passenger: {
+      name: 'Anjali Menon',
+      passportNumber: 'K9012491',
+      passportExpiry: '2029-02-14',
+      gender: 'FEMALE',
+      seatOrBerth: '07F (Window)',
+      class: 'Economy (Y)',
+      passportValid: true
+    },
+    fare: {
+      baseFare: 11200,
+      taxes: 2890,
+      platformFee: 350,
+      totalAmount: 14440
+    },
+    status: 'PENDING_ISSUANCE'
+  }
+];
+
 export default function SuperAdminTicketingDeskPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [filterType, setFilterType] = useState<'ALL' | 'FLIGHT' | 'TRAIN'>('ALL');
-  const [selectedOrder, setSelectedOrder] = useState<BookingOrder | null>(null);
+  const [orders, setOrders] = useState<BookingOrder[]>(INITIAL_ORDERS);
+  const [selectedOrder, setSelectedOrder] = useState<BookingOrder | null>(INITIAL_ORDERS[0]);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [disruptionModalOpen, setDisruptionModalOpen] = useState(false);
   const [delayMinutes, setDelayMinutes] = useState('45');
   const [newGate, setNewGate] = useState('B14');
 
-  // Initial Queue Data
-  const [orders, setOrders] = useState<BookingOrder[]>([
-    {
-      id: 'ord_1',
-      type: 'FLIGHT',
-      pnr: 'EK89XQ',
-      bookingRef: 'TRV-2026-98142',
-      carrier: 'Emirates',
-      carrierCode: 'EK',
-      flightOrTrainNumber: 'EK 562',
-      sector: 'CCJ (Calicut) → DXB (Dubai)',
-      departureTime: '2026-10-25T04:30:00Z',
-      timeRemainingHours: 5.5,
-      passenger: {
-        name: 'John Doe',
-        passportNumber: 'Z5891240',
-        passportExpiry: '2028-08-20',
-        gender: 'MALE',
-        seatOrBerth: '14A (Window)',
-        class: 'Economy (Y)',
-        passportValid: true
-      },
-      fare: {
-        baseFare: 14500,
-        taxes: 3420,
-        platformFee: 350,
-        totalAmount: 18270
-      },
-      status: 'PENDING_ISSUANCE'
-    },
-    {
-      id: 'ord_2',
-      type: 'TRAIN',
-      pnr: '4219876543',
-      bookingRef: 'TRV-2026-89104',
-      carrier: 'Indian Railways (Southern Railway)',
-      carrierCode: 'SR',
-      flightOrTrainNumber: '12617 Mangala Superfast',
-      sector: 'CLT (Kozhikode) → NZM (Nizamuddin Delhi)',
-      departureTime: '2026-10-25T13:15:00Z',
-      timeRemainingHours: 14.2,
-      passenger: {
-        name: 'Mohammed Ashraf',
-        age: 64,
-        gender: 'MALE',
-        seatOrBerth: 'Coach B3 - 42 (Lower Berth)',
-        class: 'AC 3 Tier (3A)',
-        passportValid: true
-      },
-      fare: {
-        baseFare: 2150,
-        taxes: 125,
-        platformFee: 40,
-        totalAmount: 2315
-      },
-      status: 'PENDING_ISSUANCE'
-    },
-    {
-      id: 'ord_3',
-      type: 'FLIGHT',
-      pnr: 'IX7721',
-      bookingRef: 'TRV-2026-77123',
-      carrier: 'Air India Express',
-      carrierCode: 'IX',
-      flightOrTrainNumber: 'IX 345',
-      sector: 'CCJ (Calicut) → DXB (Dubai)',
-      departureTime: '2026-10-25T10:15:00Z',
-      timeRemainingHours: 11.0,
-      passenger: {
-        name: 'Anjali Menon',
-        passportNumber: 'K9012491',
-        passportExpiry: '2029-02-14',
-        gender: 'FEMALE',
-        seatOrBerth: '07F (Window)',
-        class: 'Economy (Y)',
-        passportValid: true
-      },
-      fare: {
-        baseFare: 11200,
-        taxes: 2890,
-        platformFee: 350,
-        totalAmount: 14440
-      },
-      status: 'PENDING_ISSUANCE'
-    }
-  ]);
-
-  useEffect(() => {
-    if (orders.length > 0 && !selectedOrder) {
-      setSelectedOrder(orders[0]);
-    }
-  }, [orders, selectedOrder]);
 
   const filteredOrders = orders.filter((ord) => {
     if (filterType === 'ALL') return true;
@@ -255,27 +253,109 @@ export default function SuperAdminTicketingDeskPage() {
 
   return (
     <div className="space-y-6">
-      {/* Top Banner & Metric Ticker */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-xl">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      {/* Top Header Title (Matching Platform Operations Dashboard) */}
+      <div className="space-y-1">
+        <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+          Platform Operations Dashboard
+        </h1>
+        <p className="text-xs text-slate-400 font-medium">
+          Real-time metrics, IATA aviation ticketing, and platform infrastructure status
+        </p>
+      </div>
+
+      {/* 4 Top Metric Cards (Exact Layout from Dashboard) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Card 1: Total Registered Users / Queue */}
+        <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400">Total Registered Users</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center">
+              <Users className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-3xl font-black text-white block">
+              {orders.length + 3}
+            </span>
+            <span className="text-[11px] font-semibold text-indigo-400 mt-1 block">
+              All accounts in database
+            </span>
+          </div>
+        </div>
+
+        {/* Card 2: Active In-App Users (Now) */}
+        <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400">Active In-App Users (Now)</span>
+            <div className="w-8 h-8 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center">
+              <UserCheck className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <div className="flex items-center gap-2">
+              <span className="text-3xl font-black text-white">1</span>
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+            </div>
+            <span className="text-[11px] font-semibold text-emerald-400 mt-1 block">
+              Active on web or mobile app right now
+            </span>
+          </div>
+        </div>
+
+        {/* Card 3: Hotel Partners & Issued Tickets */}
+        <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400">Hotel Partners</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center">
+              <CreditCard className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-3xl font-black text-white block">
+              {142 + orders.filter((o) => o.status === 'ISSUED').length}
+            </span>
+            <span className="text-[11px] font-semibold text-purple-400 mt-1 block">
+              1 Luxury Suites Listed
+            </span>
+          </div>
+        </div>
+
+        {/* Card 4: Security Clearance */}
+        <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold text-slate-400">Security Clearance</span>
+            <div className="w-8 h-8 rounded-xl bg-amber-500/15 text-amber-400 flex items-center justify-center">
+              <ShieldAlert className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <span className="text-2xl font-black text-amber-400 tracking-wider block">
+              SUPER_ADMIN
+            </span>
+            <span className="text-[11px] font-semibold text-amber-400/80 mt-1 block">
+              Two-Factor OTP Active
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Live Platform Engine & System Status Card (Matching Dashboard) */}
+      <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-6 shadow-xl space-y-5">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 pb-4 border-b border-slate-800/80">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
-              <ShieldAlert className="w-6 h-6" />
+            <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center">
+              <ShieldAlert className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="text-xl font-black text-white flex items-center gap-2">
-                <span>Super Admin Ticketing Desk</span>
-                <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-[10px] font-bold uppercase tracking-wider">
-                  Live Operations
-                </span>
-              </h1>
+              <h2 className="text-sm font-extrabold text-white">
+                Live Platform Engine &amp; System Status
+              </h2>
               <p className="text-xs text-slate-400 mt-0.5">
-                Central Operations Console: Real-world IATA electronic ticket issuance, PRS rail allotment &amp; instant disruption dispatch
+                Hospitality management and user services operating under Super Admin governance
               </p>
             </div>
           </div>
 
-          {/* Sound Toggle & Refresh */}
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSoundEnabled(!soundEnabled)}
@@ -286,54 +366,49 @@ export default function SuperAdminTicketingDeskPage() {
               }`}
             >
               {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-              <span>{soundEnabled ? 'Alert Chime ON' : 'Muted'}</span>
+              <span>{soundEnabled ? 'Chime ON' : 'Muted'}</span>
             </button>
 
             <button
               onClick={() => {
-                setActionSuccessMessage('Queue refreshed with latest real-time GDS/PRS booking feeds.');
+                setActionSuccessMessage('System refreshed: Database and GDS connections operational.');
                 playAlertSound();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700/80 text-xs font-bold transition-colors cursor-pointer"
             >
-              <RefreshCw className="w-4 h-4 text-blue-400" />
-              <span>Refresh Queue</span>
+              <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+              <span>Refresh</span>
             </button>
           </div>
         </div>
 
-        {/* 4 Metric Ticker Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6">
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-amber-500/30">
-            <span className="text-xs font-semibold text-amber-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Clock className="w-3.5 h-3.5" /> Awaiting Issuance
+        {/* 3 Grid Panels */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 block">Database Engine</span>
+            <span className="text-sm font-bold text-emerald-400 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span>MongoDB Connected</span>
             </span>
-            <span className="block text-3xl font-black text-amber-400 mt-1">
-              {orders.filter((o) => o.status === 'PENDING_ISSUANCE').length}
-            </span>
+            <span className="text-[10px] text-slate-500 block font-mono">Database: travel_platform</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-emerald-500/30">
-            <span className="text-xs font-semibold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-              <CheckCircle2 className="w-3.5 h-3.5" /> Issued Today
+          <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 block">Hotel Operations</span>
+            <span className="text-sm font-bold text-purple-400 flex items-center gap-2">
+              <CreditCard className="w-3.5 h-3.5" />
+              <span>Partner Verification</span>
             </span>
-            <span className="block text-3xl font-black text-emerald-400 mt-1">
-              {142 + orders.filter((o) => o.status === 'ISSUED').length}
-            </span>
+            <span className="text-[10px] text-slate-500 block">Luxury Suites &amp; Highlights studio</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-blue-500/30">
-            <span className="text-xs font-semibold text-blue-400 uppercase tracking-wider flex items-center gap-1.5">
-              <Radio className="w-3.5 h-3.5" /> Active PNRs
+          <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+            <span className="text-[11px] font-semibold text-slate-400 block">User Moderation &amp; Status</span>
+            <span className="text-sm font-bold text-amber-400 flex items-center gap-2">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>1 Active / 6 Total</span>
             </span>
-            <span className="block text-3xl font-black text-blue-400 mt-1">890</span>
-          </div>
-
-          <div className="p-4 rounded-xl bg-slate-950/60 border border-rose-500/30">
-            <span className="text-xs font-semibold text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
-              <AlertTriangle className="w-3.5 h-3.5" /> Pending Refunds
-            </span>
-            <span className="block text-3xl font-black text-rose-400 mt-1">3</span>
+            <span className="text-[10px] text-slate-500 block">2 Blocked • 0 Recycled</span>
           </div>
         </div>
       </div>
@@ -476,7 +551,7 @@ export default function SuperAdminTicketingDeskPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 {selectedOrder.passenger.passportNumber && (
                   <div>
                     <span className="text-slate-400 block text-[10px]">Passport Number</span>

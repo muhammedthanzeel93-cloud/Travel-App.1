@@ -135,6 +135,51 @@ async function runTicketingVerificationSuite() {
     `Calculated standard IRCTC 3A flat clerkage deduction ₹180 for > 48h cancellation (Refund: ₹${cancellationResult.refundable})`
   );
 
+  // TEST GROUP 3: Travel Buddy Super Admin Authentication
+  console.log('\n--- TEST GROUP 3: Travel Buddy Super Admin 3-Field Auth ---');
+  const { AdminOperationsController } = await import('../src/features/admin-operations/adminOperations.controller.js');
+
+  // Test 8: Rejection on missing username/email/password
+  let mockStatus = 0;
+  let mockJson: any = null;
+  const mockRes = {
+    status: (s: number) => {
+      mockStatus = s;
+      return {
+        json: (data: any) => {
+          mockJson = data;
+        }
+      };
+    }
+  } as any;
+
+  await AdminOperationsController.loginAdmin({ body: { username: 'admin', email: '' } } as any, mockRes);
+  assert(
+    mockStatus === 400 && mockJson.success === false,
+    'Admin Login correctly rejects request with missing fields'
+  );
+
+  // Test 9: Rejection on invalid credentials
+  await AdminOperationsController.loginAdmin({ body: { username: 'admin', email: 'admin@wrong.com', password: 'bad' } } as any, mockRes);
+  assert(
+    mockStatus === 401 && mockJson.success === false,
+    'Admin Login correctly rejects invalid username/email/password combination'
+  );
+
+  // Test 10: Successful Super Admin login with valid credentials
+  await AdminOperationsController.loginAdmin({ body: { username: 'admin', email: 'admin@enteyathra.com', password: 'Admin@123' } } as any, mockRes);
+  assert(
+    mockStatus === 200 && mockJson.success === true && !!mockJson.token && mockJson.admin.role === 'SUPER_ADMIN',
+    `Admin Login authenticated successfully (Token issued, User: ${mockJson.admin?.username}, Role: ${mockJson.admin?.role})`
+  );
+
+  // Test 11: Admin Logout endpoint terminates session
+  await AdminOperationsController.logoutAdmin({} as any, mockRes);
+  assert(
+    mockStatus === 200 && mockJson.success === true,
+    'Admin Logout endpoint terminates session successfully'
+  );
+
   console.log('\n================================================================');
   console.log(`🏁 TEST RUN SUMMARY: ${passedTests}/${totalTests} TESTS PASSED (100% SUCCESS)`);
   console.log('================================================================\n');
