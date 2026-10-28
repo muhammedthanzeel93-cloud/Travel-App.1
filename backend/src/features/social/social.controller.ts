@@ -192,11 +192,11 @@ export class SocialController {
             name: 'Rahul Nair',
             avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=120&q=80'
           },
-          messageType: 'TICKET_SHARE',
-          ticketShare: {
-            ticketType: 'FLIGHT',
-            pnr: 'EK89XQ',
-            summary: 'Emirates EK 562 (CCJ -> DXB) â€¢ Confirmed Seat 14A'
+          messageType: 'STAY_SHARE',
+          stayShare: {
+            stayType: 'RESORT',
+            pnr: 'BK8902',
+            summary: 'Rainforest Eco Luxury Villa • Confirmed Stay'
           },
           createdAt: '11:15 AM'
         }
@@ -208,3 +208,5 @@ export class SocialController {
     }
   }
 }
+
+

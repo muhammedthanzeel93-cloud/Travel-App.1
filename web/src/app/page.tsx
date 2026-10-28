@@ -594,7 +594,7 @@ export default function HomePage() {
                 Operations &amp; Admin Desk
               </h3>
               <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                Access Ticketing Queue, partner verification, luxury hotel suites studio, and system diagnostics for Super Admins and Operators.
+                Access Traveler Governance, community moderation, verified creator badges, and system diagnostics for Super Admins.
               </p>
             </div>
             <div className="mt-6 flex items-center gap-2 text-xs font-bold text-purple-400">
@@ -1307,3 +1307,4 @@ export default function HomePage() {
     </div>
   );
 }
+

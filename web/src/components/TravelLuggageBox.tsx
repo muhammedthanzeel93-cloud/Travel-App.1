@@ -18,9 +18,9 @@ export default function TravelLuggageBox() {
 
   const stickers = [
     {
-      id: 'dubai',
-      title: 'DUBAI',
-      subtitle: 'BURJ KHALIFA 148F',
+      id: 'bali',
+      title: 'BALI',
+      subtitle: 'TROPICAL PARADISE',
       color: 'from-amber-500/30 to-orange-600/30 border-amber-500/50 text-amber-300',
       tag: '🏜️ Desert Sunset',
       rotate: '-rotate-3'
@@ -180,3 +180,4 @@ export default function TravelLuggageBox() {
     </div>
   );
 }
+
