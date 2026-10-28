@@ -6,8 +6,8 @@ import { usePathname } from 'next/navigation';
 export default function Footer() {
   const pathname = usePathname();
 
-  // Do not show footer on admin routes
-  if (pathname?.startsWith('/admin')) {
+  // Do not show footer on login landing page or admin routes
+  if (pathname === '/' || pathname?.startsWith('/admin')) {
     return null;
   }
   return (

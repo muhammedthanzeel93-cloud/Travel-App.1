@@ -2,13 +2,30 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Camera, Compass, Flame, Wifi, WifiOff, Menu, X, Sparkles, ShieldAlert } from 'lucide-react';
+import {
+  Camera,
+  Compass,
+  Wifi,
+  WifiOff,
+  Menu,
+  X,
+  ShieldAlert,
+  User,
+  LogOut
+} from 'lucide-react';
 import { useState, useEffect } from 'react';
+import {
+  getUserSession,
+  clearUserSession,
+  subscribeToUserSession,
+  UserSession
+} from '@/features/auth/userAuth';
 
 export default function Header() {
   const pathname = usePathname();
   const [isOnline, setIsOnline] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [currentUser, setCurrentUser] = useState<UserSession | null>(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
@@ -17,11 +34,18 @@ export default function Header() {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    setIsOnline(navigator.onLine);
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+    // Subscribe to user session
+    setCurrentUser(getUserSession());
+    const unsubscribe = subscribeToUserSession((session) => {
+      setCurrentUser(session);
+    });
 
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      unsubscribe();
     };
   }, []);
 
@@ -30,10 +54,15 @@ export default function Header() {
     setMobileMenuOpen(false);
   }, [pathname]);
 
-  // Do not show public header on any admin routes
-  if (pathname?.startsWith('/admin')) {
+  // Do not show public header on login landing page or admin routes
+  if (pathname === '/' || pathname?.startsWith('/admin')) {
     return null;
   }
+
+  const handleLogout = () => {
+    clearUserSession();
+    setCurrentUser(null);
+  };
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-900/90 border-b border-slate-800 px-4 lg:px-8 py-3">
@@ -80,22 +109,52 @@ export default function Header() {
         <div className="flex items-center gap-3">
           {/* Online/Offline Badge */}
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
+            className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${
               isOnline
                 ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
                 : 'bg-amber-950/80 text-amber-400 border border-amber-800/80 animate-pulse'
             }`}
           >
             {isOnline ? <Wifi className="w-3.5 h-3.5" /> : <WifiOff className="w-3.5 h-3.5" />}
-            <span className="hidden sm:inline">{isOnline ? 'Online' : 'Offline'}</span>
+            <span>{isOnline ? 'Online' : 'Offline'}</span>
           </div>
+
+          {/* Logged in User Badge or Sign In button */}
+          {currentUser ? (
+            <div className="flex items-center gap-2 bg-slate-950/80 border border-slate-800 rounded-xl px-2.5 py-1.5">
+              <img
+                src={currentUser.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80'}
+                alt={currentUser.username}
+                className="w-6 h-6 rounded-lg object-cover border border-amber-500/40"
+              />
+              <span className="text-xs font-bold text-amber-300 max-w-[100px] truncate hidden sm:inline">
+                @{currentUser.username}
+              </span>
+              <button
+                type="button"
+                onClick={handleLogout}
+                title="Sign Out"
+                className="text-slate-400 hover:text-rose-400 p-0.5 rounded cursor-pointer transition-colors"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              href="/"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500 text-slate-950 hover:bg-amber-400 transition-all shadow-sm"
+            >
+              <User className="w-3.5 h-3.5" />
+              <span>Sign In</span>
+            </Link>
+          )}
 
           <Link
             href="/admin"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500 hover:text-slate-950 transition-all shadow-sm"
           >
             <ShieldAlert className="w-3.5 h-3.5" />
-            <span>Admin Desk</span>
+            <span className="hidden sm:inline">Admin Desk</span>
           </Link>
 
           {/* Mobile Hamburger Toggle Button */}
@@ -119,7 +178,7 @@ export default function Header() {
             }`}
           >
             <Compass className="w-4 h-4 text-amber-400" />
-            <span>Home</span>
+            <span>Home &amp; Authentication</span>
           </Link>
           <Link
             href="/feed"

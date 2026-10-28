@@ -54,3 +54,7 @@ Thumbs.db
 *.swp
 *.swo
 *.tsbuildinfo
+
+# Local runtime data
+data/
+backend/data/

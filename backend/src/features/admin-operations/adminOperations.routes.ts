@@ -5,6 +5,8 @@ const router = Router();
 
 // Admin Authentication Portal
 router.post('/login', AdminOperationsController.loginAdmin);
+router.post('/login/validate', AdminOperationsController.validateAdminCredentials);
+router.post('/login/verify-otp', AdminOperationsController.verifyAdminOtp);
 router.get('/verify', AdminOperationsController.verifyAdminToken);
 router.post('/logout', AdminOperationsController.logoutAdmin);
 

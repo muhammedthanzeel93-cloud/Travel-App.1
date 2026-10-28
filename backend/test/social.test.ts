@@ -1,3 +1,4 @@
+import { AdminOperationsController } from '../src/features/admin-operations/adminOperations.controller.js';
 import { strict as assert } from 'assert';
 import { SocialController } from '../src/features/social/social.controller.js';
 import { StaysController } from '../src/features/stays/stays.controller.js';
@@ -51,6 +52,41 @@ async function runTests() {
   assert.equal(mockStatus, 200, 'Hotels endpoint should return HTTP 200');
   assert.ok(mockJson.hotels && mockJson.hotels.length > 0, 'Hotels list should not be empty');
   console.log(`✅ [PASS] Retrieved ${mockJson.hotels.length} partner hotels with photographic highlight tags`);
+
+  // Test Group 3: Admin 2FA Email OTP Verification
+  console.log('\n--- TEST GROUP 3: Admin 2FA Email OTP Verification Flow ---');
+  
+  // 3a. Invalid credentials rejection
+  await AdminOperationsController.validateAdminCredentials({
+    body: { username: 'admin', email: 'admin@travelbuddy.com', password: 'WrongPassword' }
+  } as any, mockRes);
+  assert.equal(mockStatus, 401, 'Invalid password should be rejected with 401');
+  console.log('✅ [PASS] Incorrect password rejected with HTTP 401');
+
+  // 3b. Valid credentials step 1: Send OTP to email
+  await AdminOperationsController.validateAdminCredentials({
+    body: { username: 'admin', email: 'admin@travelbuddy.com', password: 'Admin@123' }
+  } as any, mockRes);
+  assert.equal(mockStatus, 200, 'Valid credentials should dispatch 2FA OTP with 200');
+  assert.ok(mockJson.otpPreview, 'Response should contain OTP preview');
+  const dispatchedOtp = mockJson.otpPreview;
+  console.log(`✅ [PASS] Step 1: Credentials validated, 2FA OTP dispatched to email (${dispatchedOtp})`);
+
+  // 3c. Invalid OTP rejection
+  await AdminOperationsController.verifyAdminOtp({
+    body: { email: 'admin@travelbuddy.com', otp: '000000' }
+  } as any, mockRes);
+  assert.equal(mockStatus, 400, 'Invalid OTP should be rejected with 400');
+  console.log('✅ [PASS] Incorrect OTP code rejected with HTTP 400');
+
+  // 3d. Valid OTP step 2: Successful Super Admin login
+  await AdminOperationsController.verifyAdminOtp({
+    body: { email: 'admin@travelbuddy.com', otp: dispatchedOtp }
+  } as any, mockRes);
+  assert.equal(mockStatus, 200, 'Valid OTP should return HTTP 200 with JWT session token');
+  assert.ok(mockJson.token, 'Should receive JWT token');
+  assert.equal(mockJson.admin?.role, 'SUPER_ADMIN', 'Should have SUPER_ADMIN role');
+  console.log('✅ [PASS] Step 2: 2FA Email OTP verified successfully, Super Admin clearance granted');
 
   console.log('\n================================================================');
   console.log('🏁 TEST RUN SUMMARY: ALL TESTS PASSED (100% SUCCESS)');

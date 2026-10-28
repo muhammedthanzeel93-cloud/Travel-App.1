@@ -1,11 +1,12 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUser extends Document {
+  username: string;
   name: string;
-  email: string;
+  email?: string;
+  phone?: string;
   passwordHash: string;
   role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN';
-  phone?: string;
   avatarUrl?: string;
   bio?: string;
   travelerPassport?: {
@@ -27,12 +28,41 @@ export interface IUser extends Document {
 
 const UserSchema = new Schema<IUser>(
   {
-    name: { type: String, required: true, trim: true },
-    email: { type: String, required: true, unique: true, lowercase: true, trim: true },
+    username: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
+      trim: true,
+      minlength: 3,
+      maxlength: 30
+    },
+    name: {
+      type: String,
+      default: function (this: any) {
+        return this.username || 'Travel Explorer';
+      },
+      trim: true
+    },
+    email: {
+      type: String,
+      unique: true,
+      sparse: true,
+      lowercase: true,
+      trim: true
+    },
+    phone: {
+      type: String,
+      unique: true,
+      sparse: true,
+      trim: true
+    },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['TRAVELER', 'HOTEL_HOST', 'SUPER_ADMIN'], default: 'TRAVELER' },
-    phone: { type: String, default: '+91 98470 12345' },
-    avatarUrl: { type: String, default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80' },
+    avatarUrl: {
+      type: String,
+      default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
+    },
     bio: { type: String, default: 'Global nomad & cultural explorer ✈️🌍' },
     travelerPassport: {
       passportNumber: { type: String },
