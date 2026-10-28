@@ -7,8 +7,6 @@ import {
   ShieldAlert,
   Building,
   LogOut,
-  Lock,
-  ArrowRight,
   LayoutDashboard,
   Users,
   Settings,
@@ -16,8 +14,10 @@ import {
   Moon,
   Menu,
   X,
-  ExternalLink,
-  Camera
+  Camera,
+  Briefcase,
+  ChevronDown,
+  FileText
 } from 'lucide-react';
 import { getAdminSession, performAdminLogout } from '@/features/admin/auth';
 
@@ -28,6 +28,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [agencyMenuOpen, setAgencyMenuOpen] = useState(true);
 
   useEffect(() => {
     const checkAuth = () => {
@@ -76,39 +77,6 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
     await performAdminLogout();
   };
 
-  const navItems = [
-    {
-      name: 'Dashboard',
-      href: '/admin/operations/ticketing-desk',
-      icon: LayoutDashboard,
-      active: pathname === '/admin/operations/ticketing-desk'
-    },
-    {
-      name: 'Post Photos',
-      href: '/feed',
-      icon: Camera,
-      active: false
-    },
-    {
-      name: 'Hotel Partners',
-      href: '/admin/operations/rooms',
-      icon: Building,
-      active: pathname === '/admin/operations/rooms'
-    },
-    {
-      name: 'User Governance',
-      href: '/admin/operations/ticketing-desk#users',
-      icon: Users,
-      active: false
-    },
-    {
-      name: 'Admin Settings',
-      href: '/admin/operations/ticketing-desk#settings',
-      icon: Settings,
-      active: false
-    }
-  ];
-
   const currentAdmin = adminUser || {
     username: 'admin',
     email: 'admin@travelbuddy.com',
@@ -116,8 +84,11 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
     role: 'SUPER_ADMIN'
   };
 
+  const isDashboardActive = pathname === '/admin/operations/ticketing-desk';
+  const isAgencyActive = pathname.startsWith('/admin/operations/travel-agency');
+
   return (
-    <div className="min-h-screen bg-[#060810] flex flex-col lg:flex-row text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#060810] flex flex-col lg:flex-row text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950">
       {/* Mobile Top Bar */}
       <div className="lg:hidden flex items-center justify-between p-4 bg-[#090d16] border-b border-slate-800 sticky top-0 z-50">
         <div className="flex items-center gap-3">
@@ -142,9 +113,9 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
         />
       )}
 
-      {/* Left Sidebar (Desktop Fixed / Mobile Drawer) */}
+      {/* Left Sidebar (Desktop Fixed Sticky / Mobile Drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 xl:w-72 bg-[#090d16] border-r border-slate-800/80 flex flex-col justify-between p-4 transition-transform duration-200 lg:translate-x-0 lg:static lg:h-screen lg:shrink-0 ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 xl:w-72 bg-[#090d16] border-r border-slate-800/80 flex flex-col justify-between p-4 transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:overflow-y-auto ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -171,28 +142,127 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
             </div>
 
             <nav className="space-y-1.5">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                      item.active
-                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Icon className={`w-4 h-4 ${item.active ? 'text-slate-950' : 'text-slate-400'}`} />
-                      <span>{item.name}</span>
-                    </div>
-                    {item.active && (
-                      <span className="w-2 h-2 rounded-full bg-slate-950 shadow-sm" />
-                    )}
-                  </Link>
-                );
-              })}
+              {/* 1. Dashboard */}
+              <Link
+                href="/admin/operations/ticketing-desk"
+                className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                  isDashboardActive
+                    ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <LayoutDashboard className={`w-4 h-4 ${isDashboardActive ? 'text-slate-950' : 'text-slate-400'}`} />
+                  <span>Dashboard</span>
+                </div>
+                {isDashboardActive && (
+                  <span className="w-2 h-2 rounded-full bg-slate-950 shadow-sm" />
+                )}
+              </Link>
+
+              {/* 2. Travel Agency with Sub-menu */}
+              <div className="pt-1">
+                <button
+                  type="button"
+                  onClick={() => setAgencyMenuOpen(!agencyMenuOpen)}
+                  className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    isAgencyActive
+                      ? 'bg-amber-500/15 text-amber-400 border border-amber-500/30'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <Briefcase className={`w-4 h-4 ${isAgencyActive ? 'text-amber-400' : 'text-slate-400'}`} />
+                    <span>Travel Agency</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-semibold uppercase">
+                      Desk
+                    </span>
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        agencyMenuOpen ? 'rotate-180 text-amber-400' : 'text-slate-500'
+                      }`}
+                    />
+                  </div>
+                </button>
+
+                {/* Sub-menu items under Travel Agency */}
+                {agencyMenuOpen && (
+                  <div className="mt-1 ml-4 pl-3.5 border-l-2 border-slate-800/90 space-y-1 py-1">
+                    <Link
+                      href="/admin/operations/travel-agency"
+                      className={`w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                        isAgencyActive
+                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-md shadow-amber-500/20'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <FileText className={`w-3.5 h-3.5 ${isAgencyActive ? 'text-slate-950' : 'text-amber-400'}`} />
+                        <span>Agency Reports</span>
+                      </div>
+                      {isAgencyActive && (
+                        <span className="w-1.5 h-1.5 rounded-full bg-slate-950 shadow-sm" />
+                      )}
+                    </Link>
+
+                    <Link
+                      href="/admin/operations/travel-agency?tab=stays"
+                      className="w-full flex items-center justify-between px-3 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white hover:bg-slate-800/50 transition-all"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <Building className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Agency Bookings</span>
+                      </div>
+                    </Link>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Post Photos */}
+              <Link
+                href="/feed"
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <Camera className="w-4 h-4 text-slate-400" />
+                  <span>Post Photos</span>
+                </div>
+              </Link>
+
+              {/* 4. Hotel Partners */}
+              <Link
+                href="/admin/operations/travel-agency?tab=stays"
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <Building className="w-4 h-4 text-slate-400" />
+                  <span>Hotel Partners</span>
+                </div>
+              </Link>
+
+              {/* 5. User Governance */}
+              <Link
+                href="/admin/operations/travel-agency?tab=users"
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <Users className="w-4 h-4 text-slate-400" />
+                  <span>User Governance</span>
+                </div>
+              </Link>
+
+              {/* 6. Admin Settings */}
+              <Link
+                href="/admin/operations/ticketing-desk#settings"
+                className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold text-slate-400 hover:text-white hover:bg-slate-800/60 transition-all"
+              >
+                <div className="flex items-center gap-3">
+                  <Settings className="w-4 h-4 text-slate-400" />
+                  <span>Admin Settings</span>
+                </div>
+              </Link>
             </nav>
           </div>
         </div>
@@ -292,8 +362,8 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
         </div>
       )}
 
-      {/* Right Main Content Area */}
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+      {/* Right Main Content Area (Independently Scrollable) */}
+      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 lg:h-screen lg:overflow-y-auto">
         {children}
       </main>
     </div>
