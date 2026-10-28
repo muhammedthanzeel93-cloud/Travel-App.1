@@ -38,7 +38,7 @@ export default function AdminLoginPage() {
         }
       }
 
-      const stored = localStorage.getItem('ente_yathra_admin_user');
+      const stored = localStorage.getItem('travel_buddy_admin_user') || localStorage.getItem('ente_yathra_admin_user');
       if (stored) {
         const parsed = JSON.parse(stored);
         if (parsed?.role === 'SUPER_ADMIN' && parsed?.token) {
@@ -137,6 +137,8 @@ export default function AdminLoginPage() {
       }
 
       if (isSuccess && adminData) {
+        localStorage.setItem('travel_buddy_admin_user', JSON.stringify(adminData));
+        localStorage.setItem('travel_buddy_admin_token', adminData.token);
         localStorage.setItem('ente_yathra_admin_user', JSON.stringify(adminData));
         localStorage.setItem('ente_yathra_admin_token', adminData.token);
         window.dispatchEvent(new Event('ente_yathra_admin_auth_changed'));

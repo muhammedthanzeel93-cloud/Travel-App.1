@@ -1,10 +1,10 @@
 {
-  "name": "ente-yathra-web",
+  "name": "travel-buddy-web",
   "version": "1.0.0",
   "description": "Travel Buddy - Full-Stack Travel Platform Web Application",
   "private": true,
   "scripts": {
-    "dev": "node -e \"try{require('fs').rmSync('.next', {recursive:true, force:true})}catch(e){}\" && next dev -p 4550",
+    "dev": "next dev -p 4550",
     "build": "next build",
     "start": "next start -p 4550",
     "clean": "node -e \"try{require('fs').rmSync('.next', {recursive:true, force:true})}catch(e){}\"",

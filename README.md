@@ -1,12 +1,12 @@
-# Travel-app.1
+# Travel Buddy
 
-A multi-platform travel booking and ticketing ecosystem featuring Aviation (IATA) and Railway (PRS) ticketing engines, Next.js web application, Android mobile app, and iOS mobile app.
+A multi-platform social travel & explorer community platform featuring Next.js web application, Node.js/Express backend, Android mobile app, and iOS mobile app.
 
 ## 📁 Repository Structure
 
-- **`backend/`**: Node.js & TypeScript backend powered by Express and Socket.io, featuring IATA/PRS ticket generators, seat maps, QR verification, and booking management.
-- **`web/`**: Next.js 15 & React 19 web frontend with Tailwind CSS and interactive booking interfaces.
-- **`mobile-android/`**: Native Android app written in Kotlin with Gradle build configuration.
+- **`backend/`**: Node.js & TypeScript backend powered by Express and Socket.io, providing social feed, stories, reels, likes, audio discussions, and stays APIs.
+- **`web/`**: Next.js 15 & React 19 web frontend with Tailwind CSS, featuring travel stories, swipeable multi-photo posts, and explorer community interactions.
+- **`mobile-android/`**: Native Android app written in Kotlin & Jetpack Compose.
 - **`mobile-ios/`**: Native iOS application written in SwiftUI.
 - **`docs/`**: Platform architecture and API documentation.
 

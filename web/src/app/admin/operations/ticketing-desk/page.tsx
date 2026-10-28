@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useState, useEffect } from 'react';
 import {
   ShieldAlert,
@@ -303,10 +305,10 @@ export default function SuperAdminTicketingDeskPage() {
         </div>
 
         {/* Card 3: Hotel Partners & Issued Tickets */}
-        <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+        <Link href="/admin/operations/rooms" className="bg-[#0b0f19] hover:bg-slate-900 border border-slate-800/80 hover:border-purple-500/40 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition-all group cursor-pointer">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Hotel Partners</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-400 group-hover:text-purple-300 transition-colors">Hotel Partners</span>
+            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <CreditCard className="w-4 h-4" />
             </div>
           </div>
@@ -314,11 +316,12 @@ export default function SuperAdminTicketingDeskPage() {
             <span className="text-3xl font-black text-white block">
               {142 + orders.filter((o) => o.status === 'ISSUED').length}
             </span>
-            <span className="text-[11px] font-semibold text-purple-400 mt-1 block">
-              1 Luxury Suites Listed
+            <span className="text-[11px] font-semibold text-purple-400 mt-1 flex items-center gap-1">
+              <span>1 Luxury Suites Listed</span>
+              <span className="text-[10px] text-slate-500 group-hover:text-purple-400 transition-colors">→ Manage Studio</span>
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Card 4: Security Clearance */}
         <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
@@ -393,14 +396,15 @@ export default function SuperAdminTicketingDeskPage() {
             <span className="text-[10px] text-slate-500 block font-mono">Database: travel_platform</span>
           </div>
 
-          <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
-            <span className="text-[11px] font-semibold text-slate-400 block">Hotel Operations</span>
-            <span className="text-sm font-bold text-purple-400 flex items-center gap-2">
+          <Link href="/admin/operations/rooms" className="p-4 rounded-xl bg-slate-950/70 hover:bg-slate-900 border border-slate-800/80 hover:border-purple-500/50 space-y-1 transition-all group block">
+            <span className="text-[11px] font-semibold text-slate-400 block group-hover:text-slate-300 transition-colors">Hotel Operations</span>
+            <span className="text-sm font-bold text-purple-400 flex items-center gap-2 group-hover:text-purple-300 transition-colors">
               <CreditCard className="w-3.5 h-3.5" />
               <span>Partner Verification</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-300 font-normal ml-auto">Open Studio →</span>
             </span>
             <span className="text-[10px] text-slate-500 block">Luxury Suites &amp; Highlights studio</span>
-          </div>
+          </Link>
 
           <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">
             <span className="text-[11px] font-semibold text-slate-400 block">User Moderation &amp; Status</span>

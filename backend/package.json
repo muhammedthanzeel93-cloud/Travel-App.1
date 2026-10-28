@@ -1,13 +1,13 @@
 {
-  "name": "ente-yathra-backend",
+  "name": "travel-buddy-backend",
   "version": "1.0.0",
-  "description": "Travel Buddy Backend with Real-World Aviation (IATA) and Railway (PRS) Ticketing Engine",
+  "description": "Travel Buddy Backend with Social Travel Feed, Stories, Reels, and Stays",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "test": "tsx test/ticketing.test.ts"
+    "test": "tsx test/social.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

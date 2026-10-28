@@ -5,8 +5,8 @@ import Footer from '@/components/Footer';
 import ContentContainer from '@/components/ContentContainer';
 
 export const metadata: Metadata = {
-  title: 'Travel Buddy | Enterprise Aviation & Rail Suite',
-  description: 'Travel Buddy - Enterprise Multi-Platform Travel Platform with IATA & PRS Real-World Ticketing and Super Admin Desk',
+  title: 'Travel Buddy | Social Travel Feed & Community',
+  description: 'Connect with global travelers, share multi-photo stories, travel reels, and discover adventures on Travel Buddy.',
 };
 
 export default function RootLayout({
@@ -19,12 +19,11 @@ export default function RootLayout({
       <head>
         <meta name="theme-color" content="#0b0f19" />
       </head>
-      <body
-        className="min-h-screen bg-slate-950 text-slate-100 flex flex-col selection:bg-blue-600 selection:text-white"
-        suppressHydrationWarning
-      >
+      <body className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
         <Header />
-        <ContentContainer>{children}</ContentContainer>
+        <ContentContainer>
+          {children}
+        </ContentContainer>
         <Footer />
       </body>
     </html>

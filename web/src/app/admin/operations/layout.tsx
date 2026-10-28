@@ -5,9 +5,8 @@ import { usePathname } from 'next/navigation';
 import Link from 'next/link';
 import {
   ShieldAlert,
-  Plane,
-  Train,
-  Building,
+  Camera,
+      Building,
   LogOut,
   Lock,
   ArrowRight,
@@ -105,16 +104,10 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
       active: pathname === '/admin/operations/ticketing-desk'
     },
     {
-      name: 'Flight Ops',
-      href: '/admin/operations/flights',
-      icon: Plane,
-      active: pathname === '/admin/operations/flights'
-    },
-    {
-      name: 'Rail Ops',
-      href: '/admin/operations/trains',
-      icon: Train,
-      active: pathname === '/admin/operations/trains'
+      name: 'Post Photos',
+      href: '/feed',
+      icon: Camera,
+      active: false
     },
     {
       name: 'Hotel Partners',
@@ -124,13 +117,13 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
     },
     {
       name: 'User Governance',
-      href: '/admin/operations/ticketing-desk',
+      href: '/admin/operations/ticketing-desk#users',
       icon: Users,
       active: false
     },
     {
       name: 'Admin Settings',
-      href: '/admin/operations/ticketing-desk',
+      href: '/admin/operations/ticketing-desk#settings',
       icon: Settings,
       active: false
     }

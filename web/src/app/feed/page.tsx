@@ -23,13 +23,13 @@ export default function TravelSocialFeedPage() {
         'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=1000&q=80'
       ],
       currentImageIdx: 0,
-      caption: 'Golden hour at the top of Burj Khalifa! 🌅 Words cannot describe the amber glow setting across the Arabian Gulf. Double-tap to like and save to your Dubai 10-day roadmap! ✨ #DubaiDiary #BurjKhalifa #VisitDubai',
+      caption: 'Golden hour at the top of Burj Khalifa! 🌅 Words cannot describe the amber glow setting across the Arabian Gulf. Double-tap to like and share with fellow travelers! ✨ #TravelDiary #SunsetMagic #VisitDubai',
       likesCount: 1420,
       isLiked: true,
       commentsCount: 38,
       comments: [
         { name: 'Rahul Nair', text: 'Incredible golden tones! Did you catch the 17:30 sunset slot?' },
-        { name: 'Fatima Zahra', text: 'Breathtaking view! Added directly to Day 1 of my itinerary.' }
+        { name: 'Fatima Zahra', text: 'Breathtaking view! Adding this to my must-visit travel bucket list.' }
       ]
     },
     {

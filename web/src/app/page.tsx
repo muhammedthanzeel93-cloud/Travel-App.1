@@ -1,231 +1,352 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import {
-  ShieldAlert,
-  Plane,
-  Train,
-  Map,
   Camera,
-  HardDrive,
-  CheckCircle2,
-  TrendingUp,
-  Building,
-  ArrowRight,
-  Clock,
-  Sparkles
+  Heart,
+  MessageCircle,
+  Bookmark,
+  Share2,
+  Send,
+  Mic,
+  Play,
+  Pause,
+  Sparkles,
+  MapPin,
+  Compass,
+  Flame,
+  Users,
+  ArrowRight
 } from 'lucide-react';
 
 export default function HomePage() {
+  const [doubleTapPostId, setDoubleTapPostId] = useState<string | null>(null);
+  const [pollVote, setPollVote] = useState<'A' | 'B' | null>('A');
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  const [posts, setPosts] = useState([
+    {
+      id: 'post_1',
+      user: {
+        name: 'Aisha Al-Falasi',
+        handle: '@aisha_dubai',
+        avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
+      },
+      location: 'Burj Khalifa (Level 148), Dubai',
+      images: [
+        'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=1000&q=80'
+      ],
+      currentImageIdx: 0,
+      caption: 'Golden hour at the top of Burj Khalifa! 🌅 Words cannot describe the amber glow setting across the Arabian Gulf. Double-tap to like and share with fellow travelers! ✨ #TravelDiary #SunsetMagic #VisitDubai',
+      likesCount: 1420,
+      isLiked: true,
+      commentsCount: 38,
+      comments: [
+        { name: 'Rahul Nair', text: 'Incredible golden tones! Did you catch the 17:30 sunset slot?' },
+        { name: 'Fatima Zahra', text: 'Breathtaking view! Adding this to my must-visit travel bucket list.' }
+      ]
+    },
+    {
+      id: 'post_2',
+      user: {
+        name: 'Kozhikode Wanderer',
+        handle: '@clt_wanderlust',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'
+      },
+      location: 'Lahbab Red Dunes, Dubai Desert',
+      images: [
+        'https://images.unsplash.com/photo-1451337516015-6b6e9a44a8a3?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1000&q=80'
+      ],
+      currentImageIdx: 0,
+      caption: 'Dune bashing thrills followed by stargazing in the Arabian Desert 🏜️⛺ The hospitality was unmatched! #DesertSafari #DubaiTravel',
+      likesCount: 890,
+      isLiked: false,
+      commentsCount: 19,
+      comments: [
+        { name: 'Sara Khan', text: 'Looks epic! Sandboarding on the red dunes is so addictive.' }
+      ]
+    }
+  ]);
+
+  const handleDoubleTap = (postId: string) => {
+    setDoubleTapPostId(postId);
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            isLiked: true,
+            likesCount: p.isLiked ? p.likesCount : p.likesCount + 1
+          };
+        }
+        return p;
+      })
+    );
+    setTimeout(() => setDoubleTapPostId(null), 800);
+  };
+
+  const handleToggleLike = (postId: string) => {
+    setPosts((prev) =>
+      prev.map((p) => {
+        if (p.id === postId) {
+          return {
+            ...p,
+            isLiked: !p.isLiked,
+            likesCount: p.isLiked ? p.likesCount - 1 : p.likesCount + 1
+          };
+        }
+        return p;
+      })
+    );
+  };
+
   return (
     <div className="space-y-10">
       {/* Hero Banner */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-blue-950/60 border border-slate-800 p-8 sm:p-12 shadow-2xl">
-        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 rounded-full bg-blue-600/10 blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-slate-900/90 to-amber-950/40 border border-slate-800 p-8 sm:p-12 shadow-2xl">
+        <div className="absolute top-0 right-0 -mr-16 -mt-16 w-96 h-96 rounded-full bg-rose-500/10 blur-3xl pointer-events-none" />
         <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-80 h-80 rounded-full bg-amber-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 max-w-3xl space-y-4">
-          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-xs font-semibold text-blue-400">
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            <span>IATA Resolution 792 &amp; IRCTC PRS Verified Platform</span>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-xs font-semibold text-amber-400">
+            <Flame className="w-3.5 h-3.5 text-rose-400" />
+            <span>Discover &amp; Share Real-World Travel Stories</span>
           </div>
 
           <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
             Travel Buddy •{' '}
-            <span className="bg-gradient-to-r from-amber-400 via-orange-300 to-blue-400 bg-clip-text text-transparent">
-              Super Admin Command Suite
+            <span className="bg-gradient-to-r from-amber-400 via-orange-300 to-rose-400 bg-clip-text text-transparent">
+              Global Explorer Social Feed
             </span>
           </h1>
 
           <p className="text-slate-300 text-sm sm:text-base leading-relaxed">
-            Enterprise travel platform delivering real-world aviation (6-character PNRs, 13-digit IATA e-tickets, 2D BCBP barcodes), PRS rail quota ticketing, dynamic 10-day Dubai visa customizer, and 4-hour offline-first resilience.
+            Welcome to Travel Buddy! Connect with a worldwide community of explorers, share swipeable multi-photo travel memories, discover 24-hour interactive stories, and engage with traveler audio discussions.
           </p>
 
           <div className="pt-2 flex flex-wrap items-center gap-4">
             <Link
-              href="/admin"
-              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
+              href="/feed"
+              className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-amber-500/20 transition-all hover:scale-105"
             >
-              <ShieldAlert className="w-4 h-4" />
-              Admin Portal (Sign In)
+              <Camera className="w-4 h-4" />
+              Explore Social Feed &amp; Reels
             </Link>
 
-            <Link
-              href="/customizer"
+            <a
+              href="#featured-feed"
               className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-semibold text-sm border border-slate-700 transition-all"
             >
-              <Map className="w-4 h-4 text-blue-400" />
-              Dubai 10-Day Visa Planner
-            </Link>
+              <Compass className="w-4 h-4 text-amber-400" />
+              Browse Stories
+            </a>
           </div>
         </div>
 
         {/* Live Metrics Ticker */}
         <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-4 mt-8 pt-8 border-t border-slate-800/80">
           <div>
-            <span className="block text-2xl font-black text-amber-400">3 Orders</span>
-            <span className="text-xs text-slate-400 flex items-center gap-1">
-              <Clock className="w-3 h-3 text-amber-400" /> Awaiting Admin Issuance
+            <span className="block text-2xl font-black text-amber-400">12.5k+</span>
+            <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+              <Users className="w-3 h-3 text-amber-400" /> Active Explorers
             </span>
           </div>
           <div>
-            <span className="block text-2xl font-black text-white">187 Today</span>
-            <span className="text-xs text-slate-400 flex items-center gap-1">
-              <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Issued Tickets
+            <span className="block text-2xl font-black text-white">48k+</span>
+            <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+              <Camera className="w-3 h-3 text-rose-400" /> Photo Stories Shared
             </span>
           </div>
           <div>
-            <span className="block text-2xl font-black text-blue-400">890 Active</span>
-            <span className="text-xs text-slate-400 flex items-center gap-1">
-              <TrendingUp className="w-3 h-3 text-blue-400" /> PNRs Tracked
+            <span className="block text-2xl font-black text-rose-400">180k+</span>
+            <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+              <Heart className="w-3 h-3 text-rose-400" /> Likes &amp; Interactions
             </span>
           </div>
           <div>
-            <span className="block text-2xl font-black text-emerald-400">4+ Hours</span>
-            <span className="text-xs text-slate-400 flex items-center gap-1">
-              <HardDrive className="w-3 h-3 text-emerald-400" /> Offline Vault Caching
+            <span className="block text-2xl font-black text-emerald-400">95+</span>
+            <span className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
+              <Compass className="w-3 h-3 text-emerald-400" /> Destinations Featured
             </span>
           </div>
         </div>
       </div>
 
-      {/* Primary Feature Matrix */}
-      <div>
-        <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-          <span>Core Operational Verticals &amp; Modules</span>
-        </h2>
+      {/* Featured Community Feed Section */}
+      <div id="featured-feed" className="max-w-2xl mx-auto space-y-6">
+        {/* 24-Hour Stories Bar with Poll Sticker */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 space-y-3">
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+            <span>24-Hour Travel Stories &amp; Polls</span>
+          </span>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {/* Card 1: Super Admin Ticketing Desk */}
-          <Link
-            href="/admin"
-            className="group p-6 rounded-2xl bg-slate-900/60 border border-amber-500/30 hover:border-amber-400/80 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-amber-500/10"
-          >
-            <div className="w-12 h-12 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <ShieldAlert className="w-6 h-6" />
+          <div className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 flex flex-col sm:flex-row items-center gap-4">
+            <div className="relative">
+              <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-500">
+                <img
+                  src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
+                  alt="Aisha"
+                  className="w-full h-full rounded-full object-cover border-2 border-slate-950"
+                />
+              </div>
+              <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-slate-950" />
             </div>
-            <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition-colors flex items-center justify-between">
-              <span>Travel Buddy • Super Admin Desk</span>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Secure 3-field credential authentication, real-time order reception with audio alert, APIS passport verification, and 1-click issuance of 13-digit IATA e-tickets &amp; BCBP 2D barcodes.
-            </p>
-          </Link>
 
-          {/* Card 2: Flights Booking */}
-          <Link
-            href="/flights"
-            className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-blue-500/60 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-blue-500/10"
-          >
-            <div className="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Plane className="w-6 h-6" />
+            <div className="space-y-1 text-center sm:text-left flex-1">
+              <span className="text-xs font-bold text-white block">Aisha&apos;s Live Story Poll</span>
+              <p className="text-[11px] text-slate-400">&quot;Which adventure should I do tomorrow morning?&quot;</p>
+
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setPollVote('A')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                    pollVote === 'A'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  🪂 Palm Skydive (68%)
+                </button>
+                <button
+                  onClick={() => setPollVote('B')}
+                  className={`flex-1 py-1.5 px-2 rounded-lg text-xs font-bold border transition-all ${
+                    pollVote === 'B'
+                      ? 'bg-amber-500 text-slate-950 border-amber-400'
+                      : 'bg-slate-800 text-slate-300 border-slate-700'
+                  }`}
+                >
+                  🏜️ Desert Safari (32%)
+                </button>
+              </div>
             </div>
-            <h3 className="font-bold text-white text-base group-hover:text-blue-400 transition-colors flex items-center justify-between">
-              <span>IATA Flight Booking Studio</span>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Calicut (CCJ) to Dubai (DXB) flight inventory, APIS passport validation (&gt;6 months check), interactive seat picker, and IATA fare construction.
-            </p>
-          </Link>
+          </div>
+        </div>
 
-          {/* Card 3: Trains Booking */}
-          <Link
-            href="/trains"
-            className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-indigo-500/60 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-indigo-500/10"
-          >
-            <div className="w-12 h-12 rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Train className="w-6 h-6" />
+        {/* Audio Voice Note DM Preview */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center">
+              <Mic className="w-5 h-5" />
             </div>
-            <h3 className="font-bold text-white text-base group-hover:text-indigo-400 transition-colors flex items-center justify-between">
-              <span>PRS Railway Ticketing Studio</span>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              10-digit rail PNR assignment, Tatkal &amp; Ladies quotas, smart berth engine allocating lower berths for senior citizens, and Charting tracking.
-            </p>
-          </Link>
-
-          {/* Card 4: Dubai 10-Day Visa Customizer */}
-          <Link
-            href="/customizer"
-            className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-emerald-500/60 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-emerald-500/10"
-          >
-            <div className="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Map className="w-6 h-6" />
+            <div>
+              <span className="text-xs font-bold text-white block">Direct Voice Note from Traveler Rahul</span>
+              <span className="text-[11px] text-slate-400">&quot;Hey Aisha, does the view look best at golden hour?&quot;</span>
             </div>
-            <h3 className="font-bold text-white text-base group-hover:text-emerald-400 transition-colors flex items-center justify-between">
-              <span>Dubai 10-Day Visa Customizer</span>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Interactive Google Maps route builder, day-by-day attraction clusters (Burj Khalifa, Desert Safari, Palm Jumeirah), and drag-and-drop customization.
-            </p>
-          </Link>
+          </div>
 
-          {/* Card 5: Social Feed & Reels */}
+          <button
+            onClick={() => setIsPlayingAudio(!isPlayingAudio)}
+            className="p-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-rose-500 hover:from-amber-400 hover:to-rose-400 text-slate-950 font-bold transition-all shadow-md"
+          >
+            {isPlayingAudio ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
+          </button>
+        </div>
+
+        {/* Feed Posts */}
+        <div className="space-y-6">
+          {posts.map((post) => (
+            <div key={post.id} className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-xl">
+              {/* Post Header */}
+              <div className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <img src={post.user.avatar} alt={post.user.name} className="w-9 h-9 rounded-full object-cover" />
+                  <div>
+                    <span className="font-extrabold text-white text-xs block">{post.user.name}</span>
+                    <span className="text-[10px] text-slate-400 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-amber-400" /> {post.location}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Post Image Carousel with Double-Tap Heart Animation */}
+              <div
+                className="relative aspect-square cursor-pointer overflow-hidden bg-black select-none"
+                onDoubleClick={() => handleDoubleTap(post.id)}
+              >
+                <img
+                  src={post.images[post.currentImageIdx]}
+                  alt={post.caption}
+                  className="w-full h-full object-cover transition-transform duration-300"
+                />
+
+                {/* Heart Pulse Overlay */}
+                {doubleTapPostId === post.id && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                    <Heart className="w-24 h-24 text-rose-500 fill-rose-500 animate-heart-pulse drop-shadow-2xl" />
+                  </div>
+                )}
+
+                {/* Multi-Image Indicator Pill */}
+                <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">
+                  {post.currentImageIdx + 1}/{post.images.length}
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="p-4 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <button onClick={() => handleToggleLike(post.id)} className="transition-transform active:scale-125">
+                      <Heart
+                        className={`w-6 h-6 ${post.isLiked ? 'text-rose-500 fill-rose-500' : 'text-slate-300 hover:text-white'}`}
+                      />
+                    </button>
+                    <button className="text-slate-300 hover:text-white">
+                      <MessageCircle className="w-6 h-6" />
+                    </button>
+                    <button className="text-slate-300 hover:text-white">
+                      <Send className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <button className="text-slate-300 hover:text-white">
+                    <Bookmark className="w-6 h-6" />
+                  </button>
+                </div>
+
+                {/* Likes Count */}
+                <span className="block text-xs font-bold text-white">
+                  {post.likesCount.toLocaleString()} likes
+                </span>
+
+                {/* Caption */}
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  <span className="font-extrabold text-white mr-1.5">{post.user.handle}</span>
+                  {post.caption}
+                </p>
+
+                {/* Comments Preview */}
+                <div className="pt-2 border-t border-slate-800/80 space-y-1.5 text-xs">
+                  {post.comments.map((c, i) => (
+                    <div key={i} className="text-slate-400 text-[11px]">
+                      <strong className="text-slate-200 mr-1.5">{c.name}</strong>
+                      <span>{c.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Explore More CTA */}
+        <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800 text-center space-y-3">
+          <h3 className="font-extrabold text-white text-base">Want to discover more stories &amp; reels?</h3>
+          <p className="text-xs text-slate-400 max-w-md mx-auto">
+            Check out full-screen Travel Reels, connect with global creators, and share your favorite trip highlights.
+          </p>
           <Link
             href="/feed"
-            className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-pink-500/60 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-pink-500/10"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-all shadow-md"
           >
-            <div className="w-12 h-12 rounded-xl bg-pink-500/10 text-pink-400 border border-pink-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <Camera className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-white text-base group-hover:text-pink-400 transition-colors flex items-center justify-between">
-              <span>Travel-Social Feed &amp; Reels</span>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Multi-image swipeable carousels, double-tap heart animations, vertical Travel Reels, 24-hour stories with interactive stickers, and audio voice DMs.
-            </p>
-          </Link>
-
-          {/* Card 6: 4-Hour Offline Vault */}
-          <Link
-            href="/vault"
-            className="group p-6 rounded-2xl bg-slate-900/60 border border-slate-800 hover:border-teal-500/60 transition-all hover:bg-slate-900/90 hover:shadow-xl hover:shadow-teal-500/10"
-          >
-            <div className="w-12 h-12 rounded-xl bg-teal-500/10 text-teal-400 border border-teal-500/30 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-              <HardDrive className="w-6 h-6" />
-            </div>
-            <h3 className="font-bold text-white text-base group-hover:text-teal-400 transition-colors flex items-center justify-between">
-              <span>4-Hour Offline Mobile Vault</span>
-              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition-opacity" />
-            </h3>
-            <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-              Pre-cached BCBP 2D boarding passes and IRCTC rail ERS slips with IndexedDB persistence that scans seamlessly in airplane mode.
-            </p>
-          </Link>
-        </div>
-      </div>
-
-      {/* Multi-Vertical Operations Dashboards Banner */}
-      <div className="rounded-2xl bg-slate-900/40 border border-slate-800 p-6 flex flex-col md:flex-row items-center justify-between gap-4">
-        <div>
-          <h3 className="font-bold text-white text-sm">Dedicated Multi-Vertical Super Admin Command Suite</h3>
-          <p className="text-xs text-slate-400 mt-0.5">
-            Monitor flight sectors, rail charts, and hotel document verification desks independently.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
-          <Link
-            href="/admin/operations/flights"
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
-          >
-            <Plane className="w-3.5 h-3.5 text-blue-400" /> Flight Operations
-          </Link>
-          <Link
-            href="/admin/operations/trains"
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
-          >
-            <Train className="w-3.5 h-3.5 text-indigo-400" /> Rail Operations
-          </Link>
-          <Link
-            href="/admin/operations/rooms"
-            className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-slate-200 flex items-center gap-1.5 transition-colors"
-          >
-            <Building className="w-3.5 h-3.5 text-emerald-400" /> Room Operations
+            <span>Open Travel Feed</span>
+            <ArrowRight className="w-4 h-4" />
           </Link>
         </div>
       </div>
