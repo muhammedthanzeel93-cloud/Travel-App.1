@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
+import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 import { User } from '../auth/user.model.js';
 import { config } from '../../core/config/index.js';
 
@@ -40,16 +42,31 @@ export class AdminOperationsController {
         cleanPassword === MASTER_ADMIN_PASSWORD
       ) {
         isAuthenticated = true;
-      } else {
+      } else if (mongoose.connection.readyState === 1) {
         try {
-          const dbUser = await User.findOne({ email: cleanEmail, role: 'SUPER_ADMIN' });
-          if (dbUser && dbUser.passwordHash === cleanPassword) {
-            isAuthenticated = true;
-            adminName = dbUser.name || adminName;
-            adminEmail = dbUser.email || cleanEmail;
+          const dbUser = await User.findOne({
+            $or: [
+              { username: cleanUsername.toLowerCase() },
+              { email: cleanEmail }
+            ],
+            role: { $in: ['SUPER_ADMIN', 'ADMIN'] }
+          });
+          if (dbUser) {
+            let passOk = false;
+            if (dbUser.password && dbUser.password === cleanPassword) passOk = true;
+            if (dbUser.passwordHash) {
+              const bcryptMatch = await bcrypt.compare(cleanPassword, dbUser.passwordHash).catch(() => false);
+              if (bcryptMatch) passOk = true;
+            }
+            if (passOk) {
+              isAuthenticated = true;
+              adminName = dbUser.name || adminName;
+              adminEmail = dbUser.email || cleanEmail;
+              adminUsername = dbUser.username || cleanUsername;
+            }
           }
-        } catch {
-          // offline mode
+        } catch (err: any) {
+          console.warn('⚠️ [ADMIN AUTH] MongoDB query note:', err.message);
         }
       }
 
@@ -173,14 +190,14 @@ export class AdminOperationsController {
       const cleanEmail = String(email).trim().toLowerCase();
       const cleanPassword = String(password).trim();
 
-      const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
-      const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@travelbuddy.com').toLowerCase();
-      const MASTER_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
-
       let isAuthenticated = false;
       let adminName = 'Travel Buddy Super Admin';
       let adminUsername = cleanUsername;
       let adminEmail = cleanEmail;
+
+      const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
+      const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@travelbuddy.com').toLowerCase();
+      const MASTER_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
 
       if (
         cleanUsername.toLowerCase() === MASTER_ADMIN_USERNAME &&
@@ -188,16 +205,31 @@ export class AdminOperationsController {
         cleanPassword === MASTER_ADMIN_PASSWORD
       ) {
         isAuthenticated = true;
-      } else {
+      } else if (mongoose.connection.readyState === 1) {
         try {
-          const dbUser = await User.findOne({ email: cleanEmail, role: 'SUPER_ADMIN' });
-          if (dbUser && dbUser.passwordHash === cleanPassword) {
-            isAuthenticated = true;
-            adminName = dbUser.name || adminName;
-            adminEmail = dbUser.email || cleanEmail;
+          const dbUser = await User.findOne({
+            $or: [
+              { username: cleanUsername.toLowerCase() },
+              { email: cleanEmail }
+            ],
+            role: { $in: ['SUPER_ADMIN', 'ADMIN'] }
+          });
+          if (dbUser) {
+            let passOk = false;
+            if (dbUser.password && dbUser.password === cleanPassword) passOk = true;
+            if (dbUser.passwordHash) {
+              const bcryptMatch = await bcrypt.compare(cleanPassword, dbUser.passwordHash).catch(() => false);
+              if (bcryptMatch) passOk = true;
+            }
+            if (passOk) {
+              isAuthenticated = true;
+              adminName = dbUser.name || adminName;
+              adminEmail = dbUser.email || cleanEmail;
+              adminUsername = dbUser.username || cleanUsername;
+            }
           }
-        } catch {
-          // In case DB is offline/in-memory mode
+        } catch (err: any) {
+          console.warn('⚠️ [ADMIN AUTH DIRECT] MongoDB query note:', err.message);
         }
       }
 

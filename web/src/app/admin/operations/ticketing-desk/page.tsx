@@ -279,8 +279,8 @@ export default function SuperAdminPlatformDashboard() {
 
           <div className="p-3.5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
             <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Persistence Vault</span>
-            <div className="text-xs font-bold text-slate-200">JSON &amp; MongoDB Dual Storage</div>
-            <div className="text-[11px] text-purple-400 font-mono">users.json Synchronized</div>
+            <div className="text-xs font-bold text-slate-200">MongoDB Database Active</div>
+            <div className="text-[11px] text-purple-400 font-mono">travel_buddy Synchronized</div>
           </div>
         </div>
       </div>

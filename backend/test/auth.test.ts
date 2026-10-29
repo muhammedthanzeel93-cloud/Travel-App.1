@@ -1,9 +1,5 @@
 import { strict as assert } from 'assert';
-import fs from 'fs';
-import path from 'path';
 import { AuthController } from '../src/features/auth/auth.controller.js';
-
-const USERS_FILE = path.resolve(process.cwd(), 'data/users.json');
 
 console.log('================================================================');
 console.log('🧪 TRAVEL BUDDY AUTHENTICATION, OTP & DATABASE PERSISTENCE SUITE');
@@ -105,13 +101,14 @@ async function runAuthTests() {
     console.log(`✅ [PASS] New user "${testUsername}" successfully registered and stored in database`);
   }
 
-  // Test 7: Verify persistence in database file
+  // Test 7: Verify persistence in database
   {
-    assert.ok(fs.existsSync(USERS_FILE), 'Database file must exist on disk');
-    const fileContent = JSON.parse(fs.readFileSync(USERS_FILE, 'utf-8'));
-    const savedInFile = fileContent.some((u: any) => u.username === testUsername);
-    assert.ok(savedInFile, 'User must be permanently stored in database file on disk');
-    console.log(`✅ [PASS] Verified user "${testUsername}" successfully persisted in database file: ${USERS_FILE}`);
+    const { res, result } = createMockRes();
+    await AuthController.getAllUsers({} as any, res);
+    assert.equal(result.statusCode, 200);
+    const savedInDb = result.data.users.some((u: any) => u.username === testUsername);
+    assert.ok(savedInDb, 'User must be permanently stored in database');
+    console.log(`✅ [PASS] Verified user "${testUsername}" successfully persisted in database`);
   }
 
   // Test 8: Registration rejected for duplicate username

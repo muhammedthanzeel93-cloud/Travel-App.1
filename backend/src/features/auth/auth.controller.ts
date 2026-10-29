@@ -2,23 +2,8 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import fs from 'fs';
-import path from 'path';
 import { User, IUser } from './user.model.js';
 import { config } from '../../core/config/index.js';
-
-// Resolve persistent database file path
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const USERS_FILE = path.join(DATA_DIR, 'users.json');
-
-// Ensure database directory exists
-try {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-} catch (e: any) {
-  console.warn('⚠️ [DATABASE STORAGE] Could not create data directory:', e.message);
-}
 
 interface OtpRecord {
   code: string;
@@ -57,8 +42,10 @@ const DEFAULT_SEED_USERS: MemoryUser[] = [
     name: 'Aisha Al-Falasi',
     email: 'aisha@travelbuddy.com',
     phone: '+971 50 123 4567',
-    passwordHash: bcrypt.hashSync('Travel@123', 10),
+    password: 'Travel@123',
+    passwordHash: '$2a$10$wT8K48b8Wl8GkK2K9hXpTeQ6E6U7a9F9y4j4mK9l8w4b8Wl8GkK2K',
     role: 'TRAVELER',
+    status: 'ACTIVE',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
     bio: 'Dubai sky-high explorer & sunset photographer 🌅✨',
     createdAt: new Date().toISOString()
@@ -69,90 +56,18 @@ const DEFAULT_SEED_USERS: MemoryUser[] = [
     name: 'Kozhikode Wanderer',
     email: 'wanderer@enteyathra.com',
     phone: '+91 98470 54321',
-    passwordHash: bcrypt.hashSync('Travel@123', 10),
+    password: 'Travel@123',
+    passwordHash: '$2a$10$wT8K48b8Wl8GkK2K9hXpTeQ6E6U7a9F9y4j4mK9l8w4b8Wl8GkK2K',
     role: 'TRAVELER',
+    status: 'ACTIVE',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
     bio: 'Backwaters, spices, and mountain trails of Kerala 🌴⛰️',
     createdAt: new Date().toISOString()
   }
 ];
 
-// Helper to get all database paths across root and backend to ensure persistent synchronization
-function getAllDatabasePaths(): string[] {
-  const candidateDirs = [
-    path.resolve(process.cwd(), 'data'),
-    path.resolve(process.cwd(), '../data'),
-    'C:/Users/aysha/Downloads/Travel-app.1/data',
-    'C:/Users/aysha/Downloads/Travel-app.1/backend/data'
-  ];
-  const paths: string[] = [];
-  for (const dir of candidateDirs) {
-    try {
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      const f = path.join(dir, 'users.json');
-      if (!paths.includes(f)) paths.push(f);
-    } catch {}
-  }
-  return paths;
-}
-
-// Load persistent users from local database file
-function loadPersistentUsers(): MemoryUser[] {
-  for (const p of getAllDatabasePaths()) {
-    try {
-      if (fs.existsSync(p)) {
-        const raw = fs.readFileSync(p, 'utf-8');
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          memoryUsers = parsed;
-          return parsed;
-        }
-      }
-    } catch (err: any) {}
-  }
-  return [...DEFAULT_SEED_USERS];
-}
-
-// Save persistent users to local database file
-function savePersistentUsers(users: MemoryUser[]): void {
-  for (const p of getAllDatabasePaths()) {
-    try {
-      fs.writeFileSync(p, JSON.stringify(users, null, 2), 'utf-8');
-      console.log(`💾 [DATABASE FILE] Synced ${users.length} users to database file: ${p}`);
-    } catch (err: any) {
-      console.error('❌ [DATABASE FILE] Failed to persist users to file:', err.message);
-    }
-  }
-  memoryUsers = [...users];
-}
-
-// Active user repository in memory (synced with users.json)
-let memoryUsers: MemoryUser[] = loadPersistentUsers();
-
-// Sync file-based users into MongoDB whenever MongoDB connects
-mongoose.connection.on('connected', async () => {
-  try {
-    console.log('🔄 [DATABASE SYNC] Syncing local user database into MongoDB...');
-    for (const memUser of memoryUsers) {
-      const existing = await User.findOne({ username: memUser.username });
-      if (!existing) {
-        await User.create({
-          username: memUser.username,
-          name: memUser.name,
-          email: memUser.email,
-          phone: memUser.phone,
-          passwordHash: memUser.passwordHash,
-          role: memUser.role,
-          avatarUrl: memUser.avatarUrl,
-          bio: memUser.bio
-        });
-      }
-    }
-    console.log('✅ [DATABASE SYNC] User database synchronized with MongoDB.');
-  } catch (err: any) {
-    console.warn('⚠️ [DATABASE SYNC] Sync note:', err.message);
-  }
-});
+// Active user repository (retrieved from MongoDB database with initial fallback)
+let memoryUsers: MemoryUser[] = [...DEFAULT_SEED_USERS];
 
 export class AuthController {
   /**
@@ -469,12 +384,9 @@ export class AuthController {
         createdAt: new Date().toISOString()
       };
 
-      // 1. Store in Persistent Database File (Disk Persistence)
-      memoryUsers.push(newMemoryUser);
-      savePersistentUsers(memoryUsers);
-
-      // 2. Store in MongoDB Database
+      // 1. Store in MongoDB Database
       let mongoSaved = false;
+      let dbId = newUserId;
       if (isDbConnected()) {
         try {
           const dbDoc = await User.create({
@@ -482,19 +394,23 @@ export class AuthController {
             name: newMemoryUser.name,
             email: cleanEmail,
             phone: cleanPhone,
+            password: cleanPassword,
             passwordHash,
             role: (req.body.role as any) || 'USER',
+            status: 'ACTIVE',
             avatarUrl: newMemoryUser.avatarUrl,
             bio: newMemoryUser.bio
           });
           mongoSaved = true;
-          console.log(`✅ [MONGODB DATABASE] Stored new user in MongoDB database: @${cleanUsername} (ID: ${dbDoc._id})`);
+          dbId = dbDoc._id.toString();
+          console.log(`✅ [MONGODB travel_buddy] Stored new user in MongoDB database: @${cleanUsername} (ID: ${dbDoc._id})`);
         } catch (dbErr: any) {
           console.warn('⚠️ [USER REGISTRATION] MongoDB save note:', dbErr.message);
         }
-      } else {
-        console.log(`💾 [DATABASE] Stored user @${cleanUsername} in persistent database file (MongoDB is offline).`);
       }
+
+      newMemoryUser.id = dbId;
+      memoryUsers.push(newMemoryUser);
 
       // Clean up used OTP
       if (verificationTarget) {
@@ -551,18 +467,8 @@ export class AuthController {
       // Find user in database
       let user: MemoryUser | null = null;
 
-      // 1. Check in persistent store with fresh load from disk
-      const currentUsers = loadPersistentUsers();
-      user =
-        currentUsers.find(
-          (u) =>
-            u.username.toLowerCase() === cleanInput.toLowerCase() ||
-            (u.email && u.email.toLowerCase() === cleanInput.toLowerCase()) ||
-            (u.phone && u.phone.replace(/\s+/g, '') === cleanInput.replace(/\s+/g, ''))
-        ) || null;
-
-      // 2. Fallback: check MongoDB User
-      if (!user && isDbConnected()) {
+      // 1. Check MongoDB travel_buddy database
+      if (isDbConnected()) {
         try {
           const dbUser = await User.findOne({
             $or: [
@@ -579,6 +485,7 @@ export class AuthController {
               name: dbUser.name || cleanInput,
               email: dbUser.email,
               phone: dbUser.phone,
+              password: (dbUser as any).password,
               passwordHash: dbUser.passwordHash,
               role: dbUser.role as any,
               status: ((dbUser as any).status as any) || 'ACTIVE',
@@ -590,6 +497,17 @@ export class AuthController {
         } catch {
           // ignore db offline
         }
+      }
+
+      // 2. Fallback to memory
+      if (!user) {
+        user =
+          memoryUsers.find(
+            (u) =>
+              u.username.toLowerCase() === cleanInput.toLowerCase() ||
+              (u.email && u.email.toLowerCase() === cleanInput.toLowerCase()) ||
+              (u.phone && u.phone.replace(/\s+/g, '') === cleanInput.replace(/\s+/g, ''))
+          ) || null;
       }
 
       if (!user) {
@@ -617,11 +535,7 @@ export class AuthController {
       if (user.password && user.password === cleanPassword) {
         isMatch = true;
       } else if (user.passwordHash) {
-        if (cleanPassword === 'Travel@123' || cleanPassword === 'Host@123' || cleanPassword === 'User@123' || cleanPassword === 'Admin@123') {
-          isMatch = true;
-        } else {
-          isMatch = await bcrypt.compare(cleanPassword, user.passwordHash).catch(() => false);
-        }
+        isMatch = await bcrypt.compare(cleanPassword, user.passwordHash).catch(() => false);
       }
 
       if (!isMatch) {
@@ -799,7 +713,7 @@ export class AuthController {
       // Hash new password
       const newHash = await bcrypt.hash(cleanPassword, 10);
 
-      // Update in persistent store
+      // Update in memory
       const memUser = memoryUsers.find(
         (u) =>
           (u.email && u.email.toLowerCase() === cleanTarget) ||
@@ -808,7 +722,7 @@ export class AuthController {
       );
       if (memUser) {
         memUser.passwordHash = newHash;
-        savePersistentUsers(memoryUsers);
+        memUser.password = cleanPassword;
       }
 
       // Update in MongoDB if connected
@@ -822,7 +736,7 @@ export class AuthController {
                 { username: cleanTarget }
               ]
             },
-            { $set: { passwordHash: newHash } }
+            { $set: { passwordHash: newHash, password: cleanPassword } }
           );
           console.log(`✅ [MONGODB DATABASE] Password updated in MongoDB for ${cleanTarget}`);
         } catch (dbErr: any) {
@@ -887,14 +801,32 @@ export class AuthController {
    */
   public static async getAllUsers(req: Request, res: Response): Promise<void> {
     try {
-      const users = loadPersistentUsers();
-      const safe = users.map((u) => ({
+      if (isDbConnected()) {
+        const dbUsers = await User.find({}).sort({ createdAt: -1 });
+        const safe = dbUsers.map((u: any) => ({
+          id: u._id.toString(),
+          username: u.username,
+          name: u.name,
+          email: u.email || '',
+          phone: u.phone || '',
+          password: u.password || '',
+          role: u.role || 'USER',
+          status: u.status || 'ACTIVE',
+          avatarUrl: u.avatarUrl,
+          bio: u.bio || '',
+          createdAt: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString()
+        }));
+        res.status(200).json({ success: true, count: safe.length, users: safe });
+        return;
+      }
+
+      const safe = memoryUsers.map((u) => ({
         id: u.id,
         username: u.username,
         name: u.name,
         email: u.email || '',
         phone: u.phone || '',
-        password: u.password || 'Travel@123',
+        password: u.password || '',
         role: u.role || 'USER',
         status: u.status || 'ACTIVE',
         avatarUrl: u.avatarUrl,
@@ -913,27 +845,29 @@ export class AuthController {
     try {
       const { userId, id, username } = req.body;
       const targetId = userId || id;
-      let users = loadPersistentUsers();
-      const initialCount = users.length;
 
-      users = users.filter((u) => {
+      if (isDbConnected()) {
+        const query: any[] = [];
+        if (targetId) query.push({ _id: targetId });
+        if (username) query.push({ username: String(username).toLowerCase() });
+        const result = await User.deleteOne({ $or: query });
+        if (result.deletedCount > 0) {
+          res.status(200).json({ success: true, message: 'User permanently deleted from MongoDB database.' });
+          return;
+        }
+      }
+
+      const initialCount = memoryUsers.length;
+
+      memoryUsers = memoryUsers.filter((u) => {
         if (targetId && u.id === targetId) return false;
         if (username && u.username.toLowerCase() === String(username).toLowerCase()) return false;
         return true;
       });
 
-      if (users.length === initialCount) {
+      if (memoryUsers.length === initialCount) {
         res.status(404).json({ success: false, message: 'User not found in database.' });
         return;
-      }
-
-      savePersistentUsers(users);
-
-      if (isDbConnected()) {
-        try {
-          if (targetId) await User.deleteOne({ _id: targetId });
-          if (username) await User.deleteOne({ username: String(username).toLowerCase() });
-        } catch {}
       }
 
       res.status(200).json({ success: true, message: 'User permanently deleted from database.' });
@@ -949,9 +883,25 @@ export class AuthController {
     try {
       const { userId, id, username } = req.body;
       const targetId = userId || id;
-      const users = loadPersistentUsers();
 
-      const user = users.find((u) => {
+      if (isDbConnected()) {
+        const query: any[] = [];
+        if (targetId) query.push({ _id: targetId });
+        if (username) query.push({ username: String(username).toLowerCase() });
+        const dbUser = await User.findOne({ $or: query });
+        if (dbUser) {
+          dbUser.status = dbUser.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
+          await dbUser.save();
+          res.status(200).json({
+            success: true,
+            status: dbUser.status,
+            message: `User @${dbUser.username} is now ${dbUser.status}.`
+          });
+          return;
+        }
+      }
+
+      const user = memoryUsers.find((u) => {
         if (targetId && u.id === targetId) return true;
         if (username && u.username.toLowerCase() === String(username).toLowerCase()) return true;
         return false;
@@ -963,7 +913,6 @@ export class AuthController {
       }
 
       user.status = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-      savePersistentUsers(users);
 
       res.status(200).json({
         success: true,

@@ -578,7 +578,7 @@ export default function AdminUsersPage() {
               <tbody className="divide-y divide-slate-800/60 font-medium">
                 {filteredUsers.map((user) => {
                   const isPwVisible = !!visiblePasswords[user.id];
-                  const displayPw = user.password || 'User@123';
+                  const displayPw = user.password || '••••••••';
                   const isBlocked = user.status === 'BLOCKED';
                   const isSuperAdmin = user.role === 'SUPER_ADMIN';
                   const isAdminRole = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';

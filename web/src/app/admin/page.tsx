@@ -29,9 +29,9 @@ export default function AdminLoginPage() {
   const [step, setStep] = useState<'CREDENTIALS' | 'OTP'>('CREDENTIALS');
 
   // Step 1: Credentials State
-  const [username, setUsername] = useState('admin');
-  const [email, setEmail] = useState('admin@travelbuddy.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   // Step 2: 2FA Email OTP State
@@ -162,23 +162,8 @@ export default function AdminLoginPage() {
         }
       }
 
-      // 2. Standalone Master Admin validation fallback
       if (!isCredentialsValid && !errorMessage) {
-        if (
-          cleanUsername.toLowerCase() === 'admin' &&
-          (cleanEmail === 'admin@travelbuddy.com' || cleanEmail === 'admin@enteyathra.com') &&
-          cleanPassword === 'Admin@123'
-        ) {
-          isCredentialsValid = true;
-          adminPayload = {
-            username: cleanUsername,
-            email: cleanEmail,
-            name: 'Travel Buddy Super Admin',
-            role: 'SUPER_ADMIN'
-          };
-        } else {
-          setErrorMessage('Invalid admin credentials. Please verify your username, email, and password.');
-        }
+        setErrorMessage('Invalid admin credentials. Please verify your credentials against the database.');
       }
 
       if (isCredentialsValid && adminPayload) {
@@ -521,7 +506,7 @@ export default function AdminLoginPage() {
 
             <div className="pt-2 text-center space-y-1">
               <span className="text-[11px] text-slate-500 block">
-                Master Credentials: <span className="text-amber-400 font-mono font-bold">admin</span> / <span className="text-blue-400 font-mono font-bold">admin@travelbuddy.com</span> / <span className="text-slate-300 font-mono font-bold">Admin@123</span>
+                Secure Administrator Verification • Localhost MongoDB Database
               </span>
             </div>
           </form>
