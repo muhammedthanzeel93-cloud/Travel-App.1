@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
+import { playChime } from '@/lib/soundAlert';
 import {
   ShieldAlert,
   CheckCircle2,
@@ -21,25 +22,8 @@ export default function SuperAdminPlatformDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
 
-  // Play audio chime notification
   const playAlertSound = () => {
-    if (!soundEnabled || typeof window === 'undefined') return;
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(1760, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.25, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.3);
-    } catch {
-      // Audio context may be restricted before user interaction
-    }
+    playChime('success', soundEnabled);
   };
 
   return (

@@ -15,7 +15,7 @@ import {
   X,
   Camera
 } from 'lucide-react';
-import { getAdminSession, performAdminLogout } from '@/features/admin/auth';
+import { getAdminSession, setAdminSession, performAdminLogout } from '@/features/admin/auth';
 
 export default function OperationsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -41,14 +41,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
           authenticatedAt: new Date().toISOString()
         };
         setAdminUser(masterSession);
-        try {
-          localStorage.setItem('travel_buddy_admin_user', JSON.stringify(masterSession));
-          localStorage.setItem('travel_buddy_admin_token', masterSession.token);
-          localStorage.setItem('ente_yathra_admin_user', JSON.stringify(masterSession));
-          localStorage.setItem('ente_yathra_admin_token', masterSession.token);
-        } catch {
-          // ignore
-        }
+        setAdminSession(masterSession);
       }
     };
 

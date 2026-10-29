@@ -25,7 +25,6 @@ export interface MemoryUser {
   name: string;
   email?: string;
   phone?: string;
-  password?: string;
   passwordHash: string;
   role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN' | 'USER' | 'ADMIN';
   status?: 'ACTIVE' | 'BLOCKED';
@@ -42,8 +41,7 @@ const DEFAULT_SEED_USERS: MemoryUser[] = [
     name: 'Aisha Al-Falasi',
     email: 'aisha@travelbuddy.com',
     phone: '+971 50 123 4567',
-    password: 'Travel@123',
-    passwordHash: '$2a$10$wT8K48b8Wl8GkK2K9hXpTeQ6E6U7a9F9y4j4mK9l8w4b8Wl8GkK2K',
+    passwordHash: bcrypt.hashSync('Travel@123', 10),
     role: 'TRAVELER',
     status: 'ACTIVE',
     avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
@@ -56,8 +54,7 @@ const DEFAULT_SEED_USERS: MemoryUser[] = [
     name: 'Kozhikode Wanderer',
     email: 'wanderer@enteyathra.com',
     phone: '+91 98470 54321',
-    password: 'Travel@123',
-    passwordHash: '$2a$10$wT8K48b8Wl8GkK2K9hXpTeQ6E6U7a9F9y4j4mK9l8w4b8Wl8GkK2K',
+    passwordHash: bcrypt.hashSync('Travel@123', 10),
     role: 'TRAVELER',
     status: 'ACTIVE',
     avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
@@ -165,6 +162,73 @@ export class AuthController {
       res.status(200).json({
         available: true,
         message: 'Credentials available.'
+      });
+    } catch (err: any) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Check User Status (Active or Blocked)
+   */
+  public static async checkStatus(req: Request, res: Response): Promise<void> {
+    try {
+      const identifier = String(req.query.username || req.query.identifier || req.body?.identifier || req.body?.username || '').trim().toLowerCase();
+
+      if (!identifier) {
+        res.status(400).json({ success: false, message: 'Username or identifier is required.' });
+        return;
+      }
+
+      let foundUser: MemoryUser | null = null;
+
+      if (isDbConnected()) {
+        try {
+          const dbUser = await User.findOne({
+            $or: [
+              { username: identifier },
+              { email: identifier },
+              { phone: identifier }
+            ]
+          });
+          if (dbUser) {
+            foundUser = {
+              id: dbUser._id.toString(),
+              username: dbUser.username,
+              name: dbUser.name,
+              email: dbUser.email,
+              phone: dbUser.phone,
+              passwordHash: dbUser.passwordHash,
+              role: dbUser.role as any,
+              status: ((dbUser as any).status as any) || 'ACTIVE',
+              avatarUrl: dbUser.avatarUrl || '',
+              bio: dbUser.bio || '',
+              createdAt: dbUser.createdAt?.toISOString() || new Date().toISOString()
+            };
+          }
+        } catch {}
+      }
+
+      if (!foundUser) {
+        foundUser = memoryUsers.find(
+          (u) =>
+            u.username.toLowerCase() === identifier ||
+            (u.email && u.email.toLowerCase() === identifier) ||
+            (u.phone && u.phone.replace(/\s+/g, '') === identifier)
+        ) || null;
+      }
+
+      if (!foundUser) {
+        res.status(404).json({ success: false, message: 'User not found in database.' });
+        return;
+      }
+
+      res.status(200).json({
+        success: true,
+        username: foundUser.username,
+        role: foundUser.role,
+        status: foundUser.status || 'ACTIVE',
+        isBlocked: foundUser.status === 'BLOCKED'
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
@@ -394,7 +458,6 @@ export class AuthController {
             name: newMemoryUser.name,
             email: cleanEmail,
             phone: cleanPhone,
-            password: cleanPassword,
             passwordHash,
             role: (req.body.role as any) || 'USER',
             status: 'ACTIVE',
@@ -485,7 +548,6 @@ export class AuthController {
               name: dbUser.name || cleanInput,
               email: dbUser.email,
               phone: dbUser.phone,
-              password: (dbUser as any).password,
               passwordHash: dbUser.passwordHash,
               role: dbUser.role as any,
               status: ((dbUser as any).status as any) || 'ACTIVE',
@@ -530,11 +592,9 @@ export class AuthController {
         return;
       }
 
-      // Check password (supports bcrypt hash and plaintext match)
+      // Check password using secure bcrypt hash
       let isMatch = false;
-      if (user.password && user.password === cleanPassword) {
-        isMatch = true;
-      } else if (user.passwordHash) {
+      if (user.passwordHash) {
         isMatch = await bcrypt.compare(cleanPassword, user.passwordHash).catch(() => false);
       }
 
@@ -722,7 +782,6 @@ export class AuthController {
       );
       if (memUser) {
         memUser.passwordHash = newHash;
-        memUser.password = cleanPassword;
       }
 
       // Update in MongoDB if connected
@@ -736,7 +795,7 @@ export class AuthController {
                 { username: cleanTarget }
               ]
             },
-            { $set: { passwordHash: newHash, password: cleanPassword } }
+            { $set: { passwordHash: newHash } }
           );
           console.log(`✅ [MONGODB DATABASE] Password updated in MongoDB for ${cleanTarget}`);
         } catch (dbErr: any) {
@@ -809,7 +868,7 @@ export class AuthController {
           name: u.name,
           email: u.email || '',
           phone: u.phone || '',
-          password: u.password || '',
+          password: '••••••••',
           role: u.role || 'USER',
           status: u.status || 'ACTIVE',
           avatarUrl: u.avatarUrl,
@@ -826,7 +885,7 @@ export class AuthController {
         name: u.name,
         email: u.email || '',
         phone: u.phone || '',
-        password: u.password || '',
+        password: '••••••••',
         role: u.role || 'USER',
         status: u.status || 'ACTIVE',
         avatarUrl: u.avatarUrl,

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { setAdminSession, getAdminSession, performAdminLogout } from '@/features/admin/auth';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -59,14 +60,9 @@ export default function AdminLoginPage() {
           return;
         }
 
-        const stored =
-          localStorage.getItem('travel_buddy_admin_user') ||
-          localStorage.getItem('ente_yathra_admin_user');
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (parsed?.role === 'SUPER_ADMIN' && parsed?.token) {
-            setExistingSession(parsed);
-          }
+        const session = getAdminSession();
+        if (session) {
+          setExistingSession(session);
         }
       }
     } catch {
@@ -292,18 +288,13 @@ export default function AdminLoginPage() {
           username: pendingAdminData?.username || username.trim() || 'admin',
           email: cleanEmail,
           name: pendingAdminData?.name || 'Travel Buddy Super Admin',
-          role: 'SUPER_ADMIN',
+          role: 'SUPER_ADMIN' as const,
           token: sessionToken,
           authenticatedAt: new Date().toISOString()
         };
 
-        // Persist admin credentials in localStorage
-        localStorage.setItem('travel_buddy_admin_user', JSON.stringify(adminData));
-        localStorage.setItem('travel_buddy_admin_token', adminData.token);
-        localStorage.setItem('ente_yathra_admin_user', JSON.stringify(adminData));
-        localStorage.setItem('ente_yathra_admin_token', adminData.token);
-        window.dispatchEvent(new Event('travel_buddy_admin_auth_changed'));
-        window.dispatchEvent(new Event('ente_yathra_admin_auth_changed'));
+        // Persist admin credentials in session store
+        setAdminSession(adminData);
 
         setSuccessMessage('✓ Email OTP verified successfully! Redirecting to Operations Console...');
 
@@ -360,13 +351,8 @@ export default function AdminLoginPage() {
               <ArrowRight className="w-3.5 h-3.5" />
             </Link>
             <button
-              onClick={() => {
-                localStorage.removeItem('travel_buddy_admin_user');
-                localStorage.removeItem('travel_buddy_admin_token');
-                localStorage.removeItem('ente_yathra_admin_user');
-                localStorage.removeItem('ente_yathra_admin_token');
-                setExistingSession(null);
-                setSuccessMessage('Signed out. You can now log in below.');
+              onClick={async () => {
+                await performAdminLogout();
               }}
               className="px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-semibold border border-slate-700 transition-colors"
             >

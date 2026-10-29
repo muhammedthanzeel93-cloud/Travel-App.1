@@ -1,7 +1,8 @@
+const DEFAULT_BACKEND = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+
 const CANDIDATE_API_URLS = [
   '/api',
-  'http://localhost:5000/api/v1',
-  'http://localhost:5001/api/v1'
+  `${DEFAULT_BACKEND}/api/v1`
 ];
 
 export async function fetchFromApi<T = any>(endpoint: string, options: RequestInit = {}): Promise<T> {

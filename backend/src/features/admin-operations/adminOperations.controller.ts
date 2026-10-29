@@ -9,6 +9,74 @@ export class AdminOperationsController {
   private static activeAdminOtps = new Map<string, { otp: string; expiresAt: number; adminData: any }>();
 
   /**
+   * Centralized helper to verify super admin credentials
+   */
+  private static async verifyAdminCredentials(
+    username: string,
+    email: string,
+    password: string
+  ): Promise<{
+    authenticated: boolean;
+    adminData?: { username: string; email: string; name: string; role: 'SUPER_ADMIN' };
+  }> {
+    const cleanUsername = String(username).trim();
+    const cleanEmail = String(email).trim().toLowerCase();
+    const cleanPassword = String(password).trim();
+
+    const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
+    const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@travelbuddy.com').toLowerCase();
+    const MASTER_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
+
+    let isAuthenticated = false;
+    let adminName = 'Travel Buddy Super Admin';
+    let adminUsername = cleanUsername;
+    let adminEmail = cleanEmail;
+
+    if (
+      cleanUsername.toLowerCase() === MASTER_ADMIN_USERNAME &&
+      (cleanEmail === MASTER_ADMIN_EMAIL || cleanEmail === 'admin@enteyathra.com') &&
+      cleanPassword === MASTER_ADMIN_PASSWORD
+    ) {
+      isAuthenticated = true;
+    } else if (mongoose.connection.readyState === 1) {
+      try {
+        const dbUser = await User.findOne({
+          $or: [
+            { username: cleanUsername.toLowerCase() },
+            { email: cleanEmail }
+          ],
+          role: { $in: ['SUPER_ADMIN', 'ADMIN'] }
+        });
+        if (dbUser && dbUser.passwordHash) {
+          const passOk = await bcrypt.compare(cleanPassword, dbUser.passwordHash).catch(() => false);
+          if (passOk) {
+            isAuthenticated = true;
+            adminName = dbUser.name || adminName;
+            adminEmail = dbUser.email || cleanEmail;
+            adminUsername = dbUser.username || cleanUsername;
+          }
+        }
+      } catch (err: any) {
+        console.warn('⚠️ [ADMIN AUTH] MongoDB query note:', err.message);
+      }
+    }
+
+    if (!isAuthenticated) {
+      return { authenticated: false };
+    }
+
+    return {
+      authenticated: true,
+      adminData: {
+        username: adminUsername,
+        email: adminEmail,
+        name: adminName,
+        role: 'SUPER_ADMIN'
+      }
+    };
+  }
+
+  /**
    * Step 1: Validate Admin Credentials and Dispatch 2FA OTP to Email
    */
   public static async validateAdminCredentials(req: Request, res: Response): Promise<void> {
@@ -23,54 +91,10 @@ export class AdminOperationsController {
         return;
       }
 
-      const cleanUsername = String(username).trim();
       const cleanEmail = String(email).trim().toLowerCase();
-      const cleanPassword = String(password).trim();
+      const authResult = await AdminOperationsController.verifyAdminCredentials(username, email, password);
 
-      const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
-      const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@travelbuddy.com').toLowerCase();
-      const MASTER_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
-
-      let isAuthenticated = false;
-      let adminName = 'Travel Buddy Super Admin';
-      let adminUsername = cleanUsername;
-      let adminEmail = cleanEmail;
-
-      if (
-        cleanUsername.toLowerCase() === MASTER_ADMIN_USERNAME &&
-        (cleanEmail === MASTER_ADMIN_EMAIL || cleanEmail === 'admin@enteyathra.com') &&
-        cleanPassword === MASTER_ADMIN_PASSWORD
-      ) {
-        isAuthenticated = true;
-      } else if (mongoose.connection.readyState === 1) {
-        try {
-          const dbUser = await User.findOne({
-            $or: [
-              { username: cleanUsername.toLowerCase() },
-              { email: cleanEmail }
-            ],
-            role: { $in: ['SUPER_ADMIN', 'ADMIN'] }
-          });
-          if (dbUser) {
-            let passOk = false;
-            if (dbUser.password && dbUser.password === cleanPassword) passOk = true;
-            if (dbUser.passwordHash) {
-              const bcryptMatch = await bcrypt.compare(cleanPassword, dbUser.passwordHash).catch(() => false);
-              if (bcryptMatch) passOk = true;
-            }
-            if (passOk) {
-              isAuthenticated = true;
-              adminName = dbUser.name || adminName;
-              adminEmail = dbUser.email || cleanEmail;
-              adminUsername = dbUser.username || cleanUsername;
-            }
-          }
-        } catch (err: any) {
-          console.warn('⚠️ [ADMIN AUTH] MongoDB query note:', err.message);
-        }
-      }
-
-      if (!isAuthenticated) {
+      if (!authResult.authenticated || !authResult.adminData) {
         res.status(401).json({
           success: false,
           message: 'Invalid admin credentials. Please verify your username, email, and password.'
@@ -85,12 +109,7 @@ export class AdminOperationsController {
       AdminOperationsController.activeAdminOtps.set(cleanEmail, {
         otp,
         expiresAt,
-        adminData: {
-          username: adminUsername,
-          email: adminEmail,
-          name: adminName,
-          role: 'SUPER_ADMIN'
-        }
+        adminData: authResult.adminData
       });
 
       console.log(`[ADMIN 2FA EMAIL DISPATCH] Verification OTP sent to ${cleanEmail}: ${otp}`);
@@ -186,54 +205,9 @@ export class AdminOperationsController {
         return;
       }
 
-      const cleanUsername = String(username).trim();
-      const cleanEmail = String(email).trim().toLowerCase();
-      const cleanPassword = String(password).trim();
+      const authResult = await AdminOperationsController.verifyAdminCredentials(username, email, password);
 
-      let isAuthenticated = false;
-      let adminName = 'Travel Buddy Super Admin';
-      let adminUsername = cleanUsername;
-      let adminEmail = cleanEmail;
-
-      const MASTER_ADMIN_USERNAME = (process.env.ADMIN_USERNAME || 'admin').toLowerCase();
-      const MASTER_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || 'admin@travelbuddy.com').toLowerCase();
-      const MASTER_ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Admin@123';
-
-      if (
-        cleanUsername.toLowerCase() === MASTER_ADMIN_USERNAME &&
-        (cleanEmail === MASTER_ADMIN_EMAIL || cleanEmail === 'admin@enteyathra.com') &&
-        cleanPassword === MASTER_ADMIN_PASSWORD
-      ) {
-        isAuthenticated = true;
-      } else if (mongoose.connection.readyState === 1) {
-        try {
-          const dbUser = await User.findOne({
-            $or: [
-              { username: cleanUsername.toLowerCase() },
-              { email: cleanEmail }
-            ],
-            role: { $in: ['SUPER_ADMIN', 'ADMIN'] }
-          });
-          if (dbUser) {
-            let passOk = false;
-            if (dbUser.password && dbUser.password === cleanPassword) passOk = true;
-            if (dbUser.passwordHash) {
-              const bcryptMatch = await bcrypt.compare(cleanPassword, dbUser.passwordHash).catch(() => false);
-              if (bcryptMatch) passOk = true;
-            }
-            if (passOk) {
-              isAuthenticated = true;
-              adminName = dbUser.name || adminName;
-              adminEmail = dbUser.email || cleanEmail;
-              adminUsername = dbUser.username || cleanUsername;
-            }
-          }
-        } catch (err: any) {
-          console.warn('⚠️ [ADMIN AUTH DIRECT] MongoDB query note:', err.message);
-        }
-      }
-
-      if (!isAuthenticated) {
+      if (!authResult.authenticated || !authResult.adminData) {
         res.status(401).json({
           success: false,
           message: 'Invalid admin credentials. Please verify your username, email, and password.'
@@ -241,11 +215,12 @@ export class AdminOperationsController {
         return;
       }
 
+      const adminData = authResult.adminData;
       const jwtSecret = config.jwtSecret || 'ente_yathra_jwt_super_admin_secret_2026';
       const token = jwt.sign(
         {
-          username: adminUsername,
-          email: adminEmail,
+          username: adminData.username,
+          email: adminData.email,
           role: 'SUPER_ADMIN',
           platform: 'Travel Buddy'
         },
@@ -257,12 +232,7 @@ export class AdminOperationsController {
         success: true,
         message: 'Travel Buddy Super Admin authentication successful.',
         token,
-        admin: {
-          username: adminUsername,
-          email: adminEmail,
-          name: adminName,
-          role: 'SUPER_ADMIN'
-        }
+        admin: adminData
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });

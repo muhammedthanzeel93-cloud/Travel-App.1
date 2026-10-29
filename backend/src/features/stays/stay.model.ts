@@ -68,7 +68,7 @@ export interface IRoomBooking extends Document {
   checkInStatus: 'UPCOMING' | 'CHECKED_IN' | 'CHECKED_OUT' | 'CANCELLED';
   actualCheckInTime?: Date;
   actualCheckOutTime?: Date;
-  escrowStatus: 'HELD_UNTIL_24H_POST_CHECKIN' | 'RELEASED_TO_HOST' | 'REFUNDED';
+  escrowStatus: 'HELD_UNTIL_24H_POST_CHECKIN' | 'HELD_IN_ESCROW' | 'RELEASED_TO_HOST' | 'RELEASED_TO_PARTNER' | 'REFUNDED';
   hotelVoucherCode: string;
   createdAt: Date;
   updatedAt: Date;
@@ -155,7 +155,7 @@ const RoomBookingSchema = new Schema<IRoomBooking>(
     actualCheckOutTime: Date,
     escrowStatus: {
       type: String,
-      enum: ['HELD_UNTIL_24H_POST_CHECKIN', 'RELEASED_TO_HOST', 'REFUNDED'],
+      enum: ['HELD_UNTIL_24H_POST_CHECKIN', 'HELD_IN_ESCROW', 'RELEASED_TO_HOST', 'RELEASED_TO_PARTNER', 'REFUNDED'],
       default: 'HELD_UNTIL_24H_POST_CHECKIN'
     },
     hotelVoucherCode: { type: String, required: true }

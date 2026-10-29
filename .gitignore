@@ -56,5 +56,5 @@ Thumbs.db
 *.tsbuildinfo
 
 # Local runtime data
-data/
+/data/
 backend/data/

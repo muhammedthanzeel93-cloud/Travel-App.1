@@ -69,7 +69,7 @@ export interface IStory extends Document {
 export interface IDirectMessage extends Document {
   senderId: mongoose.Types.ObjectId;
   recipientId: mongoose.Types.ObjectId;
-  messageType: 'TEXT' | 'AUDIO_VOICE_NOTE' | 'TICKET_SHARE';
+  messageType: 'TEXT' | 'AUDIO_VOICE_NOTE' | 'TICKET_SHARE' | 'STAY_SHARE';
   text?: string;
   audioVoiceNote?: {
     audioUrl: string;
@@ -81,6 +81,7 @@ export interface IDirectMessage extends Document {
     pnr: string;
     summary: string;
   };
+  stayShare?: { stayType: string; pnr: string; summary: string };
   isRead: boolean;
   createdAt: Date;
 }
@@ -176,7 +177,7 @@ const DirectMessageSchema = new Schema<IDirectMessage>(
     recipientId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     messageType: {
       type: String,
-      enum: ['TEXT', 'AUDIO_VOICE_NOTE', 'TICKET_SHARE'],
+      enum: ['TEXT', 'AUDIO_VOICE_NOTE', 'TICKET_SHARE', 'STAY_SHARE'],
       default: 'TEXT'
     },
     text: String,
@@ -190,6 +191,7 @@ const DirectMessageSchema = new Schema<IDirectMessage>(
       pnr: String,
       summary: String
     },
+    stayShare: { stayType: String, pnr: String, summary: String },
     isRead: { type: Boolean, default: false }
   },
   { timestamps: true }

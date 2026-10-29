@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { playChime } from '@/lib/soundAlert';
 import {
   Users,
   User,
@@ -61,26 +62,8 @@ export default function AdminUsersPage() {
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Audio notification chime
   const playAlertSound = (type: 'success' | 'warning' = 'success') => {
-    if (!soundEnabled || typeof window === 'undefined') return;
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.type = 'sine';
-      const freq = type === 'success' ? 880 : 440;
-      osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(freq * 1.5, audioCtx.currentTime + 0.15);
-      gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.25);
-    } catch {
-      // Audio context might be restricted before interaction
-    }
+    playChime(type, soundEnabled);
   };
 
   // Fetch users from database API

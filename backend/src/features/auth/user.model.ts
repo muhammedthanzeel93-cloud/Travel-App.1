@@ -5,7 +5,6 @@ export interface IUser extends Document {
   name: string;
   email?: string;
   phone?: string;
-  password?: string;
   passwordHash: string;
   role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN' | 'USER' | 'ADMIN';
   status: 'ACTIVE' | 'BLOCKED';
@@ -59,8 +58,7 @@ const UserSchema = new Schema<IUser>(
       sparse: true,
       trim: true
     },
-    password: { type: String },
-    passwordHash: { type: String, required: false },
+    passwordHash: { type: String, required: true },
     role: { type: String, enum: ['TRAVELER', 'HOTEL_HOST', 'SUPER_ADMIN', 'USER', 'ADMIN'], default: 'USER' },
     status: { type: String, enum: ['ACTIVE', 'BLOCKED'], default: 'ACTIVE' },
     avatarUrl: {
