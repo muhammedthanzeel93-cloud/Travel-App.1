@@ -36,7 +36,7 @@ export default function AdminLoginPage() {
 
   // Step 2: 2FA Email OTP State
   const [otp, setOtp] = useState('');
-  const [sentOtpPreview, setSentOtpPreview] = useState<string>('492810');
+  const [sentOtpPreview, setSentOtpPreview] = useState<string>('');
   const [countdown, setCountdown] = useState<number>(60);
   const [isResending, setIsResending] = useState(false);
   const [pendingAdminData, setPendingAdminData] = useState<any>(null);
@@ -280,7 +280,7 @@ export default function AdminLoginPage() {
 
       // 2. Offline / Standalone verification
       if (!isOtpVerified && !errorMessage) {
-        if (cleanOtp === sentOtpPreview || cleanOtp === '492810') {
+        if (sentOtpPreview && cleanOtp === sentOtpPreview) {
           isOtpVerified = true;
         } else {
           setErrorMessage('Invalid OTP code. Please enter the correct 6-digit code sent to your email.');

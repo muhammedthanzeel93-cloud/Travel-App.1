@@ -127,11 +127,9 @@ export class AdminOperationsController {
 
       const record = AdminOperationsController.activeAdminOtps.get(cleanEmail);
 
-      // Support master fallback OTP '492810' or matched active OTP
-      const isMasterTestOtp = cleanOtp === '492810' && (cleanEmail === 'admin@travelbuddy.com' || cleanEmail === 'admin@enteyathra.com');
-      const isStoredOtpValid = record && record.otp === cleanOtp && record.expiresAt > Date.now();
+      const isStoredOtpValid = Boolean(record && record.otp === cleanOtp && record.expiresAt > Date.now());
 
-      if (!isMasterTestOtp && !isStoredOtpValid) {
+      if (!isStoredOtpValid) {
         res.status(400).json({
           success: false,
           message: 'Invalid or expired OTP code. Please enter the correct 6-digit code sent to your email.'
@@ -139,11 +137,20 @@ export class AdminOperationsController {
         return;
       }
 
-      const adminData = record?.adminData || {
-        username: 'admin',
+      // Verify admin user from database if connected
+      let dbAdmin: any = null;
+      if (mongoose.connection.readyState === 1) {
+        try {
+          dbAdmin = await User.findOne({ email: cleanEmail, role: { $in: ['SUPER_ADMIN', 'ADMIN'] } });
+        } catch (e: any) {
+          console.warn('⚠️ [ADMIN VERIFY] DB lookup note:', e.message);
+        }
+      }
+      const adminData = {
+        username: dbAdmin?.username || record?.adminData?.username || 'admin',
         email: cleanEmail,
-        name: 'Travel Buddy Super Admin',
-        role: 'SUPER_ADMIN'
+        name: dbAdmin?.name || record?.adminData?.name || 'Administrator',
+        role: (dbAdmin?.role as any) || 'SUPER_ADMIN'
       };
 
       AdminOperationsController.activeAdminOtps.delete(cleanEmail);

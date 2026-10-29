@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ShieldAlert,
@@ -19,6 +19,7 @@ import { getAdminSession, performAdminLogout } from '@/features/admin/auth';
 
 export default function OperationsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const [adminUser, setAdminUser] = useState<any>(null);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
@@ -31,24 +32,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
       if (session) {
         setAdminUser(session);
       } else {
-        // Auto-provision master session for local dev so operations console never hangs
-        const masterSession = {
-          username: 'admin',
-          email: 'admin@travelbuddy.com',
-          name: 'Travel Buddy Super Admin',
-          role: 'SUPER_ADMIN' as const,
-          token: 'jwt_offline_vault_travel_buddy_2026',
-          authenticatedAt: new Date().toISOString()
-        };
-        setAdminUser(masterSession);
-        try {
-          localStorage.setItem('travel_buddy_admin_user', JSON.stringify(masterSession));
-          localStorage.setItem('travel_buddy_admin_token', masterSession.token);
-          localStorage.setItem('ente_yathra_admin_user', JSON.stringify(masterSession));
-          localStorage.setItem('ente_yathra_admin_token', masterSession.token);
-        } catch {
-          // ignore
-        }
+        router.replace('/admin');
       }
     };
 
@@ -60,7 +44,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
       window.removeEventListener('travel_buddy_admin_auth_changed', checkAuth);
       window.removeEventListener('ente_yathra_admin_auth_changed', checkAuth);
     };
-  }, []);
+  }, [router]);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -73,9 +57,9 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
   };
 
   const currentAdmin = adminUser || {
-    username: 'admin',
-    email: 'admin@travelbuddy.com',
-    name: 'Travel Buddy Super Admin',
+    username: 'Administrator',
+    email: '',
+    name: 'Administrator',
     role: 'SUPER_ADMIN'
   };
 

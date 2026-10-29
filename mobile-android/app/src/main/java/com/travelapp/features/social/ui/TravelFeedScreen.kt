@@ -37,8 +37,8 @@ fun TravelFeedScreen() {
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Aisha Al-Falasi (@aisha_dubai)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                    Text("Burj Khalifa Level 148 sunset views ✨ #DubaiDiary", color = Color(0xFF94A3B8), fontSize = 12.sp)
+                    Text("Community Explorer (@traveler)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 14.sp)
+                    Text("Discover top travel destinations around the world ✨ #TravelDiary", color = Color(0xFF94A3B8), fontSize = 12.sp)
                     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.Favorite, contentDescription = null, tint = Color(0xFFF43F5E))
                         Text("1,420 likes", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
