@@ -96,20 +96,28 @@ export default function SuperAdminPlatformDashboard() {
       {/* 4 Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Registered Travelers */}
-        <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">
+        <Link
+          href="/admin/operations/users"
+          className="bg-[#0b0f19] border border-slate-800/80 hover:border-purple-500/40 rounded-2xl p-5 shadow-lg flex flex-col justify-between transition-all group cursor-pointer"
+        >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-semibold text-slate-400">Registered Travelers</span>
-            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center">
+            <span className="text-xs font-semibold text-slate-400 group-hover:text-purple-300 transition-colors">
+              Registered Travelers
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-purple-500/15 text-purple-400 flex items-center justify-center group-hover:scale-110 transition-transform">
               <Users className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-4">
             <span className="text-3xl font-black text-white block">5</span>
-            <span className="text-[11px] font-semibold text-purple-400 mt-1 block">
-              Active Community Database
+            <span className="text-[11px] font-semibold text-purple-400 mt-1 flex items-center gap-1">
+              <span>Active Community Database</span>
+              <span className="text-[10px] text-slate-500 group-hover:text-purple-300 transition-colors">
+                → Manage Users
+              </span>
             </span>
           </div>
-        </div>
+        </Link>
 
         {/* Card 2: Active In-App Users (Now) */}
         <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl p-5 shadow-lg flex flex-col justify-between">

@@ -4,7 +4,7 @@ export interface UserSession {
   name: string;
   email?: string;
   phone?: string;
-  role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN';
+  role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN' | 'USER' | 'ADMIN' | string;
   avatarUrl?: string;
   bio?: string;
   token: string;

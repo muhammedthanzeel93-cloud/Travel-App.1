@@ -84,10 +84,23 @@ export default function HomePage() {
   const [forgotSuccessMsg, setForgotSuccessMsg] = useState<string | null>(null);
   const [forgotOtpPreview, setForgotOtpPreview] = useState<string | null>(null);
 
-  // Initial Check for Existing User Session
+  // Initial Check for Existing User Session & Verify Administrator Block Status
   useEffect(() => {
     const session = getUserSession();
-    setCurrentUser(session);
+    if (session) {
+      setCurrentUser(session);
+      // Immediately verify with server if user has been blocked by administrator
+      fetch(`/api/auth/check-status?username=${encodeURIComponent(session.username)}`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (data && (data.status === 'BLOCKED' || data.isBlocked)) {
+            clearUserSession();
+            setCurrentUser(null);
+            setLoginError(`Your account (@${session.username}) has been BLOCKED by the administrator. Access is disabled.`);
+          }
+        })
+        .catch(() => {});
+    }
     setIsCheckingSession(false);
 
     const unsubscribe = subscribeToUserSession((updated) => {
@@ -153,16 +166,31 @@ export default function HomePage() {
     setLoginLoading(true);
 
     try {
-      const res = await fetchFromApi<{ success: boolean; token: string; user: any; message?: string }>(
+      const res = await fetchFromApi<{
+        success: boolean;
+        token: string;
+        user: any;
+        message?: string;
+        blocked?: boolean;
+      }>(
         '/auth/login',
         {
           method: 'POST',
           body: JSON.stringify({
             username: cleanUsername,
+            identifier: cleanUsername,
             password: cleanPassword
           })
         }
       );
+
+      // Blocked account protection check
+      if (res.user && res.user.status === 'BLOCKED') {
+        clearUserSession();
+        setCurrentUser(null);
+        setLoginError(`Your account (@${res.user.username}) has been BLOCKED by the administrator. Access is disabled for this ${res.user.role || 'user'} account.`);
+        return;
+      }
 
       if (res.success && res.token && res.user) {
         const session: UserSession = {
@@ -171,7 +199,7 @@ export default function HomePage() {
           name: res.user.name || res.user.username,
           email: res.user.email,
           phone: res.user.phone,
-          role: res.user.role || 'TRAVELER',
+          role: res.user.role || 'USER',
           avatarUrl: res.user.avatarUrl,
           bio: res.user.bio,
           token: res.token,

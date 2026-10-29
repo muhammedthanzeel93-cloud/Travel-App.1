@@ -25,4 +25,9 @@ router.post('/forgot-password/reset', AuthController.resetPassword);
 // Current User Profile
 router.get('/me', AuthController.getProfile);
 
+// User Management (Admin Console)
+router.get('/users', AuthController.getAllUsers);
+router.post('/users/delete', AuthController.deleteUser);
+router.post('/users/toggle-block', AuthController.toggleBlockUser);
+
 export default router;

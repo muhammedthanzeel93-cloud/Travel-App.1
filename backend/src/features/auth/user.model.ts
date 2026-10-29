@@ -6,7 +6,7 @@ export interface IUser extends Document {
   email?: string;
   phone?: string;
   passwordHash: string;
-  role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN';
+  role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN' | 'USER' | 'ADMIN';
   avatarUrl?: string;
   bio?: string;
   travelerPassport?: {
@@ -58,7 +58,7 @@ const UserSchema = new Schema<IUser>(
       trim: true
     },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['TRAVELER', 'HOTEL_HOST', 'SUPER_ADMIN'], default: 'TRAVELER' },
+    role: { type: String, enum: ['TRAVELER', 'HOTEL_HOST', 'SUPER_ADMIN', 'USER', 'ADMIN'], default: 'USER' },
     avatarUrl: {
       type: String,
       default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'

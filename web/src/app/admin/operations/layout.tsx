@@ -93,10 +93,10 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
       active: pathname === '/feed'
     },
     {
-      name: 'User Governance',
-      href: '/admin/operations/ticketing-desk#users',
+      name: 'User',
+      href: '/admin/operations/users',
       icon: Users,
-      active: false
+      active: pathname === '/admin/operations/users'
     },
     {
       name: 'Admin Settings',
@@ -217,7 +217,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
             href="/"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-2 px-3 rounded-xl bg-slate-900/80 hover:bg-slate-855 border border-slate-800 text-blue-400 hover:text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
+            className="w-full py-2 px-3 rounded-xl bg-slate-900/80 hover:bg-slate-850 border border-slate-800 text-blue-400 hover:text-blue-300 font-bold text-xs flex items-center justify-center gap-2 transition-colors shadow-sm"
           >
             <Compass className="w-3.5 h-3.5" />
             <span>Traveler View (User Page)</span>
