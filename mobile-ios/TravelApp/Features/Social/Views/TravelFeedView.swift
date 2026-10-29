@@ -9,11 +9,11 @@ struct TravelFeedView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Community Explorer (@traveler)")
+                            Text("Aisha Al-Falasi (@aisha_dubai)")
                                 .font(.subheadline)
                                 .fontWeight(.bold)
                                 .foregroundColor(.white)
-                            Text("Discover top travel destinations around the world ✨ #TravelDiary")
+                            Text("Burj Khalifa Level 148 golden hour vibes 🌅✨ #DubaiDiary")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                             HStack {

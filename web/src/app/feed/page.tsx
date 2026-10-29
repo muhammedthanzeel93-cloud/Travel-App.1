@@ -1,74 +1,59 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Camera, Heart, MessageCircle, Bookmark, Share2, Send, Mic, Play, Pause, Sparkles, MapPin, Volume2 } from 'lucide-react';
-import { fetchFromApi } from '@/lib/api';
-
-interface FeedUser {
-  name: string;
-  handle: string;
-  avatar: string;
-}
-
-interface FeedPost {
-  id: string;
-  user: FeedUser;
-  location: string;
-  images: string[];
-  currentImageIdx: number;
-  caption: string;
-  likesCount: number;
-  isLiked: boolean;
-  commentsCount: number;
-  comments: { name: string; text: string }[];
-}
 
 export default function TravelSocialFeedPage() {
   const [doubleTapPostId, setDoubleTapPostId] = useState<string | null>(null);
   const [pollVote, setPollVote] = useState<'A' | 'B' | null>('A');
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
 
-  const [posts, setPosts] = useState<FeedPost[]>([
+  const [posts, setPosts] = useState([
     {
       id: 'post_1',
       user: {
-        name: 'Community Explorer',
-        handle: '@traveler',
+        name: 'Aisha Al-Falasi',
+        handle: '@aisha_dubai',
         avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'
       },
-      location: 'Burj Khalifa, Dubai',
+      location: 'Burj Khalifa (Level 148), Dubai',
       images: [
         'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1000&q=80',
-        'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1000&q=80'
+        'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=1000&q=80'
       ],
       currentImageIdx: 0,
-      caption: 'Golden hour at the top of Burj Khalifa! 🌅 Double-tap to like and share with fellow travelers! ✨ #TravelDiary #VisitDubai',
+      caption: 'Golden hour at the top of Burj Khalifa! 🌅 Words cannot describe the amber glow setting across the Arabian Gulf. Double-tap to like and share with fellow travelers! ✨ #TravelDiary #SunsetMagic #VisitDubai',
       likesCount: 1420,
       isLiked: true,
       commentsCount: 38,
       comments: [
-        { name: 'Community Member', text: 'Incredible sunset view! Adding this to my bucket list.' }
+        { name: 'Rahul Nair', text: 'Incredible golden tones! Did you catch the 17:30 sunset slot?' },
+        { name: 'Fatima Zahra', text: 'Breathtaking view! Adding this to my must-visit travel bucket list.' }
+      ]
+    },
+    {
+      id: 'post_2',
+      user: {
+        name: 'Kozhikode Wanderer',
+        handle: '@clt_wanderlust',
+        avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80'
+      },
+      location: 'Lahbab Red Dunes, Dubai Desert',
+      images: [
+        'https://images.unsplash.com/photo-1451337516015-6b6e9a44a8a3?auto=format&fit=crop&w=1000&q=80',
+        'https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1000&q=80'
+      ],
+      currentImageIdx: 0,
+      caption: 'Dune bashing thrills followed by stargazing in the Arabian Desert 🏜️⛺ The hospitality was unmatched! #DesertSafari #DubaiTravel',
+      likesCount: 890,
+      isLiked: false,
+      commentsCount: 19,
+      comments: [
+        { name: 'Sara Khan', text: 'Looks epic! Sandboarding on the red dunes is so addictive.' }
       ]
     }
   ]);
-
-  useEffect(() => {
-    let isMounted = true;
-    async function loadFeed() {
-      try {
-        const data = await fetchFromApi<{ success: boolean; posts: FeedPost[] }>('/social/feed');
-        if (isMounted && data.success && Array.isArray(data.posts) && data.posts.length > 0) {
-          setPosts(data.posts);
-        }
-      } catch {
-        // Fallback to initial community placeholder if offline
-      }
-    }
-    loadFeed();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
 
   const handleDoubleTap = (postId: string) => {
     setDoubleTapPostId(postId);
@@ -117,7 +102,7 @@ export default function TravelSocialFeedPage() {
             <div className="w-14 h-14 rounded-full p-[2px] bg-gradient-to-tr from-amber-500 via-rose-500 to-indigo-500">
               <img
                 src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80"
-                alt="Community Traveler"
+                alt="Aisha"
                 className="w-full h-full rounded-full object-cover border-2 border-slate-950"
               />
             </div>
@@ -125,8 +110,8 @@ export default function TravelSocialFeedPage() {
           </div>
 
           <div className="space-y-1 text-center sm:text-left flex-1">
-            <span className="text-xs font-bold text-white block">Community Live Story Poll</span>
-            <p className="text-[11px] text-slate-400">"Which adventure should we explore next?"</p>
+            <span className="text-xs font-bold text-white block">Aisha's Live Story Poll</span>
+            <p className="text-[11px] text-slate-400">"Which adventure should I do tomorrow morning?"</p>
 
             <div className="flex gap-2 pt-1">
               <button
@@ -161,8 +146,8 @@ export default function TravelSocialFeedPage() {
             <Mic className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-xs font-bold text-white block">Direct Voice Note from Traveler</span>
-            <span className="text-[11px] text-slate-400">"Does the red line metro go straight to the Dubai Frame?"</span>
+            <span className="text-xs font-bold text-white block">Direct Voice Note from Traveler Rahul</span>
+            <span className="text-[11px] text-slate-400">"Hey Aisha, does the red line metro go straight to the frame?"</span>
           </div>
         </div>
 
@@ -181,9 +166,9 @@ export default function TravelSocialFeedPage() {
             {/* Post Header */}
             <div className="p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <img src={post.user?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80'} alt={post.user?.name || 'Traveler'} className="w-9 h-9 rounded-full object-cover" />
+                <img src={post.user.avatar} alt={post.user.name} className="w-9 h-9 rounded-full object-cover" />
                 <div>
-                  <span className="font-extrabold text-white text-xs block">{post.user?.name || 'Traveler'}</span>
+                  <span className="font-extrabold text-white text-xs block">{post.user.name}</span>
                   <span className="text-[10px] text-slate-400 flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-amber-400" /> {post.location}
                   </span>
@@ -197,7 +182,7 @@ export default function TravelSocialFeedPage() {
               onDoubleClick={() => handleDoubleTap(post.id)}
             >
               <img
-                src={post.images?.[post.currentImageIdx] || post.images?.[0] || 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1000&q=80'}
+                src={post.images[post.currentImageIdx]}
                 alt={post.caption}
                 className="w-full h-full object-cover transition-transform duration-300"
               />
@@ -210,11 +195,9 @@ export default function TravelSocialFeedPage() {
               )}
 
               {/* Multi-Image Indicator Pill */}
-              {post.images && post.images.length > 1 && (
-                <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">
-                  {post.currentImageIdx + 1}/{post.images.length}
-                </div>
-              )}
+              <div className="absolute top-3 right-3 px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-md text-[10px] font-bold text-white">
+                {post.currentImageIdx + 1}/{post.images.length}
+              </div>
             </div>
 
             {/* Action Buttons */}
@@ -241,26 +224,24 @@ export default function TravelSocialFeedPage() {
 
               {/* Likes Count */}
               <span className="block text-xs font-bold text-white">
-                {(post.likesCount || 0).toLocaleString()} likes
+                {post.likesCount.toLocaleString()} likes
               </span>
 
               {/* Caption */}
               <p className="text-xs text-slate-300 leading-relaxed">
-                <span className="font-extrabold text-white mr-1.5">{post.user?.handle || '@traveler'}</span>
+                <span className="font-extrabold text-white mr-1.5">{post.user.handle}</span>
                 {post.caption}
               </p>
 
               {/* Comments Preview */}
-              {post.comments && post.comments.length > 0 && (
-                <div className="pt-2 border-t border-slate-800/80 space-y-1.5 text-xs">
-                  {post.comments.map((c, i) => (
-                    <div key={i} className="text-slate-400 text-[11px]">
-                      <strong className="text-slate-200 mr-1.5">{c.name}</strong>
-                      <span>{c.text}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+              <div className="pt-2 border-t border-slate-800/80 space-y-1.5 text-xs">
+                {post.comments.map((c, i) => (
+                  <div key={i} className="text-slate-400 text-[11px]">
+                    <strong className="text-slate-200 mr-1.5">{c.name}</strong>
+                    <span>{c.text}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         ))}
