@@ -914,6 +914,9 @@ export class AuthController {
     try {
       const { userId, id, username } = req.body;
       const targetId = userId || id;
+      const adminActor = (req as any).user?.username || 'SuperAdmin';
+
+      console.log(`🛡️ [ADMIN AUDIT] User deletion triggered for [${targetId || username}] by Admin @${adminActor} from IP ${req.ip} at ${new Date().toISOString()}`);
 
       if (isDbConnected()) {
         const query: any[] = [];
@@ -952,6 +955,9 @@ export class AuthController {
     try {
       const { userId, id, username } = req.body;
       const targetId = userId || id;
+      const adminActor = (req as any).user?.username || 'SuperAdmin';
+
+      console.log(`🛡️ [ADMIN AUDIT] User status toggle triggered for [${targetId || username}] by Admin @${adminActor} from IP ${req.ip} at ${new Date().toISOString()}`);
 
       if (isDbConnected()) {
         const query: any[] = [];

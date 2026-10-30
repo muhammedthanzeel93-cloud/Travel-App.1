@@ -75,9 +75,9 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
   const navItems = [
     {
       name: 'Dashboard',
-      href: '/admin/operations/ticketing-desk',
+      href: '/admin/operations',
       icon: LayoutDashboard,
-      active: pathname === '/admin/operations/ticketing-desk'
+      active: pathname === '/admin/operations'
     },
     {
       name: 'Post Photos',
@@ -93,7 +93,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
     },
     {
       name: 'Admin Settings',
-      href: '/admin/operations/ticketing-desk#settings',
+      href: '/admin/operations#settings',
       icon: Settings,
       active: false
     }

@@ -343,7 +343,7 @@ export class SocialController {
               },
               messageType: m.messageType,
               audioVoiceNote: m.audioVoiceNote,
-              stayShare: m.ticketShare,
+              stayShare: m.stayShare,
               createdAt: m.createdAt
                 ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
                 : 'Now'

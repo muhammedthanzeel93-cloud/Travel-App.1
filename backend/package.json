@@ -8,7 +8,7 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "test": "tsx test/social.test.ts",
-    "test:all": "tsx test/auth.test.ts && tsx test/social.test.ts && tsx test/ticketing.test.ts"
+    "test:all": "tsx test/auth.test.ts && tsx test/social.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -19,7 +19,6 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
-    "qrcode": "^1.5.4",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
   },
@@ -29,7 +28,6 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.10.7",
-    "@types/qrcode": "^1.5.5",
     "@types/uuid": "^10.0.0",
     "tsx": "^4.19.2",
     "typescript": "^5.7.3"

@@ -217,7 +217,7 @@ export default function AdminUsersPage() {
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Link
-              href="/admin/operations/ticketing-desk"
+              href="/admin/operations"
               className="inline-flex items-center gap-1 text-slate-400 hover:text-white text-xs font-semibold transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

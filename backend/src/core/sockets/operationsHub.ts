@@ -8,7 +8,7 @@ export class OperationsHubSocket {
   public static initialize(io: SocketIOServer) {
     this.io = io;
 
-    // 🔒 Security Handshake: Authenticate client socket connection with JWT
+    // 🔒 ZERO-TRUST SECURITY: Authenticate client socket connection with JWT
     io.use((socket: Socket, next: (err?: Error) => void) => {
       const token =
         socket.handshake.auth?.token ||
@@ -16,26 +16,26 @@ export class OperationsHubSocket {
           ? socket.handshake.headers.authorization.split(' ')[1]
           : null);
 
-      if (token) {
-        try {
-          const decoded = jwt.verify(token, config.jwtSecret) as any;
-          socket.data.user = decoded;
-          return next();
-        } catch (err) {
-          console.warn(`⚠️ [SOCKET AUTH] Invalid token attempt from socket ID ${socket.id}`);
-          // Allow connection as anonymous guest for public alerts, but socket.data.user remains undefined
-          return next();
-        }
+      if (!token) {
+        console.warn(`🛑 [SOCKET REJECTED] Anonymous connection rejected from socket ${socket.id}: Missing Bearer Token`);
+        return next(new Error('Authentication required: Missing or invalid token'));
       }
-      // Allow anonymous connection for public broadcasts
-      next();
+
+      try {
+        const decoded = jwt.verify(token, config.jwtSecret) as any;
+        socket.data.user = decoded;
+        return next();
+      } catch (err: any) {
+        console.warn(`🛑 [SOCKET REJECTED] Token verification failed for socket ${socket.id}: ${err.message}`);
+        return next(new Error('Authentication failed: Invalid or expired token'));
+      }
     });
 
     io.on('connection', (socket: Socket) => {
       const user = socket.data.user;
-      console.log(`[SOCKET CONNECTED] Client ID: ${socket.id} (User: ${user ? `@${user.username} [${user.role}]` : 'Anonymous Guest'})`);
+      console.log(`[SOCKET CONNECTED] Client ID: ${socket.id} (User: @${user?.username || 'Authenticated'} [${user?.role || 'USER'}])`);
 
-      // Guarded Admin Desk room (Super Admin privilege required)
+      // Guarded Admin Desk room (Super Admin privilege strictly required)
       socket.on('join:admin-desk', () => {
         if (!socket.data.user || socket.data.user.role !== 'SUPER_ADMIN') {
           console.warn(`🛑 [SECURITY BREACH REJECTED] Unauthorized join:admin-desk attempt by socket ${socket.id}`);
@@ -46,17 +46,6 @@ export class OperationsHubSocket {
         console.log(`🛡️ [SOCKET AUTHORIZED] ${socket.id} (@${socket.data.user.username}) joined admin-operations room`);
       });
 
-      // Guarded User Vault room (Prevent IDOR eavesdropping)
-      socket.on('join:user-vault', (userId: string) => {
-        if (socket.data.user && socket.data.user.id !== userId && socket.data.user.role !== 'SUPER_ADMIN') {
-          console.warn(`🛑 [IDOR ATTEMPT REJECTED] Socket ${socket.id} attempted to join vault for other user ${userId}`);
-          socket.emit('socket:error', { message: 'Access denied: Cannot access another user vault.' });
-          return;
-        }
-        socket.join(`user:${userId}`);
-        console.log(`[SOCKET] ${socket.id} joined user:${userId} room`);
-      });
-
       socket.on('disconnect', () => {
         console.log(`[SOCKET DISCONNECTED] Client ID: ${socket.id}`);
       });
@@ -64,39 +53,16 @@ export class OperationsHubSocket {
   }
 
   /**
-   * Broadcasts a new booking order requiring ticketing action to the Super Admin Desk
+   * Broadcasts administrative operations alert to Super Admin Desk
    */
-  public static broadcastNewBookingToAdmin(orderData: any) {
+  public static broadcastAdminAlert(alertData: any) {
     if (this.io) {
-      this.io.to('admin-operations').emit('admin:new-booking-queued', {
+      this.io.to('admin-operations').emit('admin:alert', {
         timestamp: new Date(),
-        orderData,
+        alertData,
         soundAlert: true
       });
-      console.log(`[SOCKET BROADCAST] Emitted admin:new-booking-queued for order ${orderData.bookingReference}`);
-    }
-  }
-
-  /**
-   * Emits ticket issuance confirmation directly to the traveler's offline vault
-   */
-  public static pushTicketToTravelerVault(userId: string, ticketData: any) {
-    if (this.io) {
-      this.io.to(`user:${userId}`).emit('vault:ticket-ready', {
-        ticketData,
-        cachedAt: new Date()
-      });
-      console.log(`[SOCKET PUSH] Pushed ticket ${ticketData.pnr} to traveler vault user:${userId}`);
-    }
-  }
-
-  /**
-   * Disruption alert broadcast (Flight delay, Gate change, Platform change)
-   */
-  public static broadcastDisruptionAlert(channel: string, alertData: any) {
-    if (this.io) {
-      this.io.emit('broadcast:disruption-alert', alertData);
-      console.log(`[SOCKET BROADCAST] Disruption alert pushed: ${alertData.summary}`);
+      console.log(`[SOCKET BROADCAST] Emitted admin:alert`);
     }
   }
 }

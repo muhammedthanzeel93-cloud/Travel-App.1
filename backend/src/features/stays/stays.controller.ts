@@ -103,7 +103,19 @@ export class StaysController {
       const targetHotel = MOCK_HOTELS.find((h) => h._id === hotelId);
       const targetRoom = targetHotel?.rooms.find((r) => r._id === roomId);
 
+      // 🔒 Concurrency & Inventory Guard: Atomic double-booking prevention
       if (targetRoom) {
+        if ((targetRoom as any).availableCount !== undefined && (targetRoom as any).availableCount <= 0) {
+          res.status(409).json({
+            success: false,
+            message: 'This room is currently fully booked. Please select another room or date.'
+          });
+          return;
+        }
+        if ((targetRoom as any).availableCount !== undefined) {
+          (targetRoom as any).availableCount--;
+        }
+
         if (packageId) {
           const pkg = targetRoom.packages?.find((p) => p.packageName === packageId);
           if (pkg) {

@@ -2,15 +2,15 @@
 
 import React, { useState } from 'react';
 import {
-  Plane,
   Sparkles,
   MapPin,
   Globe2,
   Tag,
-  Ticket,
   ShieldCheck,
   Luggage,
-  Compass
+  Compass,
+  Camera,
+  Heart
 } from 'lucide-react';
 
 export default function TravelLuggageBox() {
@@ -56,7 +56,7 @@ export default function TravelLuggageBox() {
       {/* Background Ambient Glow */}
       <div className="absolute -inset-2 bg-gradient-to-tr from-amber-500/10 via-rose-500/10 to-indigo-500/10 rounded-3xl blur-2xl -z-10" />
 
-      {/* The Travel Suitcase ("ട്രാവൽ പെട്ടി") Container */}
+      {/* The Travel Suitcase Container */}
       <div className="relative bg-gradient-to-b from-[#1c1813] via-[#15120e] to-[#0d0b09] border-2 border-[#5c4028]/80 rounded-3xl p-6 sm:p-8 shadow-2xl overflow-hidden flex flex-col justify-between min-h-[580px]">
         {/* Suitcase Texture Highlights & Metal Corner Guards */}
         <div className="absolute top-0 left-0 w-8 h-8 border-t-4 border-l-4 border-amber-500/60 rounded-tl-2xl pointer-events-none" />
@@ -104,43 +104,42 @@ export default function TravelLuggageBox() {
                 </span>
               </div>
               <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
-                Your Adventure Passport
+                Explorer Community Passport
               </h2>
             </div>
           </div>
         </div>
 
-        {/* Boarding Pass & Luggage Tag in Center */}
+        {/* Community Explorer Passport Card in Center */}
         <div className="relative z-10 my-6 space-y-4">
-          {/* Boarding Pass Envelope */}
           <div className="bg-slate-900/90 backdrop-blur-md border border-amber-500/30 rounded-2xl p-4 shadow-xl relative overflow-hidden transform -rotate-1 hover:rotate-0 transition-transform">
             <div className="flex items-center justify-between border-b border-slate-800 pb-2.5">
               <div className="flex items-center gap-2">
-                <Ticket className="w-4 h-4 text-amber-400" />
-                <span className="text-xs font-mono font-bold text-white tracking-wider">BOARDING PASS • VIP EXPLORER</span>
+                <Compass className="w-4 h-4 text-amber-400" />
+                <span className="text-xs font-mono font-bold text-white tracking-wider">COMMUNITY PASSPORT • EXPLORER</span>
               </div>
               <span className="text-[11px] font-mono px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                GATE 01 • READY
+                MEMBER • ACTIVE
               </span>
             </div>
 
             <div className="grid grid-cols-3 gap-2 pt-3 text-center">
               <div className="border-r border-slate-800/80">
-                <span className="text-[10px] text-slate-400 uppercase font-mono block">ORIGIN</span>
-                <span className="text-sm font-black text-amber-400">YOUR HOME</span>
+                <span className="text-[10px] text-slate-400 uppercase font-mono block">COMMUNITY</span>
+                <span className="text-sm font-black text-amber-400">GLOBAL</span>
               </div>
               <div className="flex flex-col items-center justify-center border-r border-slate-800/80">
-                <Plane className="w-4 h-4 text-slate-400 rotate-90" />
-                <span className="text-[9px] text-slate-500 font-mono">NON-STOP</span>
+                <Camera className="w-4 h-4 text-amber-400" />
+                <span className="text-[9px] text-slate-500 font-mono">STORIES</span>
               </div>
               <div>
-                <span className="text-[10px] text-slate-400 uppercase font-mono block">DESTINATION</span>
-                <span className="text-sm font-black text-rose-400">THE WORLD</span>
+                <span className="text-[10px] text-slate-400 uppercase font-mono block">DESTINATIONS</span>
+                <span className="text-sm font-black text-rose-400">WORLDWIDE</span>
               </div>
             </div>
           </div>
 
-          {/* Travel Stickers on Suitcase ("പെട്ടിയിലെ സ്റ്റിക്കറുകൾ") */}
+          {/* Travel Stickers on Suitcase */}
           <div>
             <div className="flex items-center justify-between mb-2">
               <span className="text-[11px] font-mono uppercase tracking-wider text-amber-400/90 flex items-center gap-1.5">
@@ -174,10 +173,9 @@ export default function TravelLuggageBox() {
             <Compass className="w-4 h-4 text-amber-400" />
             <span className="font-semibold text-slate-300">Travel Buddy Suitcase</span>
           </div>
-          <span className="text-[11px] font-mono text-amber-400/70">Verified Traveler Identity</span>
+          <span className="text-[11px] font-mono text-amber-400/70">Verified Explorer Community</span>
         </div>
       </div>
     </div>
   );
 }
-

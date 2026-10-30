@@ -14,18 +14,13 @@ Write-Host "`n2. Running Backend Social & Admin Tests..." -ForegroundColor Yello
 npx tsx test/social.test.ts
 if ($LASTEXITCODE -ne 0) { Write-Host "❌ Social tests failed!" -ForegroundColor Red; exit 1 }
 
-# 3. Run Backend Aviation & Railway Ticketing Tests
-Write-Host "`n3. Running Aviation & Railway Ticketing Tests..." -ForegroundColor Yellow
-npx tsx test/ticketing.test.ts
-if ($LASTEXITCODE -ne 0) { Write-Host "❌ Ticketing tests failed!" -ForegroundColor Red; exit 1 }
-
-# 4. Backend Build Check
-Write-Host "`n4. Running Backend Build (tsc)..." -ForegroundColor Yellow
+# 3. Backend Build Check
+Write-Host "`n3. Running Backend Build (tsc)..." -ForegroundColor Yellow
 npm run build
 if ($LASTEXITCODE -ne 0) { Write-Host "❌ Backend build failed!" -ForegroundColor Red; exit 1 }
 
-# 5. Web Frontend Build Check
-Write-Host "`n5. Running Web Frontend Build (next build)..." -ForegroundColor Yellow
+# 4. Web Frontend Build Check
+Write-Host "`n4. Running Web Frontend Build (next build)..." -ForegroundColor Yellow
 cd ..\web
 npm run build
 if ($LASTEXITCODE -ne 0) { Write-Host "❌ Web build failed!" -ForegroundColor Red; exit 1 }

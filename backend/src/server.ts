@@ -71,7 +71,7 @@ app.get('/health', (req: Request, res: Response) => {
     app: 'Travel Buddy',
     security: 'ZERO_TRUST_HARDENED',
     architecture: 'Feature-Based Architecture',
-    service: 'Travel Buddy Core Gateway & Real-World Ticketing Engine (IATA & PRS)',
+    service: 'Travel Buddy Core Gateway & Social Explorer Platform',
     uptimeSeconds: process.uptime(),
     timestamp: new Date().toISOString()
   });
@@ -83,7 +83,7 @@ mongoose
   .then(() => console.log('✅ [DATABASE] Connected to MongoDB Atlas / Local Instance successfully.'))
   .catch((err) => {
     console.warn('⚠️ [DATABASE] MongoDB not reachable at', config.mongoUri);
-    console.log('⚡ [BACKEND] Running in in-memory resilience mode for testing & simulated ticketing.');
+    console.log('⚡ [BACKEND] Running in in-memory resilience mode for testing.');
   });
 
 // Start Server with Graceful Port Fallback

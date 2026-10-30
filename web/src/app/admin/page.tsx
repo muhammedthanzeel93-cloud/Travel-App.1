@@ -299,7 +299,7 @@ export default function AdminLoginPage() {
         setSuccessMessage('✓ Email OTP verified successfully! Redirecting to Operations Console...');
 
         setTimeout(() => {
-          router.replace('/admin/operations/ticketing-desk');
+          router.replace('/admin/operations');
         }, 600);
       }
     } catch (err: any) {
@@ -344,7 +344,7 @@ export default function AdminLoginPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Link
-              href="/admin/operations/ticketing-desk"
+              href="/admin/operations"
               className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs transition-colors flex items-center gap-1 shadow-md shadow-amber-500/20"
             >
               <span>Dashboard</span>
