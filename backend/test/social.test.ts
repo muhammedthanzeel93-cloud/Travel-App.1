@@ -68,9 +68,10 @@ async function runTests() {
     body: { username: 'admin', email: 'admin@travelbuddy.com', password: 'Admin@123' }
   } as any, mockRes);
   assert.equal(mockStatus, 200, 'Valid credentials should dispatch 2FA OTP with 200');
-  assert.ok(mockJson.otpPreview, 'Response should contain OTP preview');
-  const dispatchedOtp = mockJson.otpPreview;
-  console.log(`✅ [PASS] Step 1: Credentials validated, 2FA OTP dispatched to email (${dispatchedOtp})`);
+  assert.equal(mockJson.otpPreview, undefined, 'CRITICAL SECURITY CHECK: 2FA OTP must NEVER be leaked in HTTP response');
+  const dispatchedOtp = AdminOperationsController._getActiveAdminOtpForTesting('admin@travelbuddy.com') || '';
+  assert.ok(dispatchedOtp, '2FA OTP should be stored securely in memory');
+  console.log(`✅ [PASS] Step 1: Credentials validated, 2FA OTP dispatched to email without response leakage`);
 
   // 3c. Invalid OTP rejection
   await AdminOperationsController.verifyAdminOtp({

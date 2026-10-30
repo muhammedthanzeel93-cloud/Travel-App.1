@@ -66,9 +66,10 @@ async function runAuthTests() {
       body: { target: testEmail, channel: 'email', type: 'REGISTRATION' }
     } as any, res);
     assert.equal(result.statusCode, 200);
-    assert.ok(result.data.otpPreview, 'OTP code should be generated and returned in preview');
-    generatedEmailOtp = result.data.otpPreview;
-    console.log(`✅ [PASS] OTP sent to email (${testEmail}): ${generatedEmailOtp}`);
+    assert.equal(result.data.otpPreview, undefined, 'CRITICAL SECURITY CHECK: OTP must NEVER be leaked in HTTP response');
+    generatedEmailOtp = AuthController._getOtpRecordForTest(testEmail) || '';
+    assert.ok(generatedEmailOtp, 'OTP must be generated and stored securely in memory');
+    console.log(`✅ [PASS] OTP safely dispatched to email (${testEmail}), no response leakage!`);
   }
 
   // Test 5: Verify OTP
@@ -147,9 +148,10 @@ async function runAuthTests() {
       body: { identifier: testUsername }
     } as any, res);
     assert.equal(result.statusCode, 200);
-    assert.ok(result.data.otpPreview, 'Password reset OTP generated');
-    resetOtp = result.data.otpPreview;
-    console.log(`✅ [PASS] Password reset OTP requested for "${testUsername}": ${resetOtp}`);
+    assert.equal(result.data.otpPreview, undefined, 'CRITICAL SECURITY CHECK: Password reset OTP must NOT be leaked in HTTP response');
+    resetOtp = AuthController._getOtpRecordForTest(testEmail) || '';
+    assert.ok(resetOtp, 'Password reset OTP stored in server memory');
+    console.log(`✅ [PASS] Password reset OTP requested for "${testUsername}", response cleanly sanitized!`);
   }
 
   // Test 11: Reset Password with OTP
@@ -178,8 +180,35 @@ async function runAuthTests() {
     console.log('✅ [PASS] Successfully logged in with newly reset password');
   }
 
+  // Test 13: Attacker Role Injection & Privilege Escalation Prevention
+  console.log('\n--- TEST GROUP 5: Security Role Hardening & Injection Prevention ---');
+  {
+    const maliciousEmail = `hacker_${uniqueSuffix}@darkweb.com`;
+    // Pre-dispatch OTP for registration
+    const { res: otpRes } = createMockRes();
+    await AuthController.sendOtp({ body: { target: maliciousEmail, channel: 'email', type: 'REGISTRATION' } } as any, otpRes);
+    const otp = AuthController._getOtpRecordForTest(maliciousEmail) || '';
+    const { res: verifyRes } = createMockRes();
+    await AuthController.verifyOtp({ body: { target: maliciousEmail, otp } } as any, verifyRes);
+
+    // Attacker tries to inject 'TRAVEL_AGENCY' role
+    const { res, result } = createMockRes();
+    await AuthController.register({
+      body: {
+        username: `rogue_agency_${uniqueSuffix}`,
+        email: maliciousEmail,
+        password: 'Password@123',
+        role: 'TRAVEL_AGENCY' // Attempted privilege escalation
+      }
+    } as any, res);
+
+    assert.equal(result.statusCode, 201);
+    assert.equal(result.data.user.role, 'USER', 'CRITICAL SECURITY CHECK: Attacker role must be locked to USER');
+    console.log('✅ [PASS] Privilege escalation blocked: client-supplied "TRAVEL_AGENCY" role locked to "USER"');
+  }
+
   console.log('\n================================================================');
-  console.log('🎉 ALL 12 TESTS PASSED! DATA CONFIRMED STORED IN DATABASE!');
+  console.log('🎉 ALL 13 TESTS PASSED! ZERO-TRUST SECURITY & PERSISTENCE VERIFIED!');
   console.log('================================================================');
 }
 

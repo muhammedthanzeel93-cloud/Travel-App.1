@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
-import { User, IUser } from './user.model.js';
+import { User, IUser, UserRole } from './user.model.js';
 import { config } from '../../core/config/index.js';
 
 interface OtpRecord {
@@ -26,7 +26,7 @@ export interface MemoryUser {
   email?: string;
   phone?: string;
   passwordHash: string;
-  role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN' | 'USER' | 'ADMIN';
+  role: UserRole;
   status?: 'ACTIVE' | 'BLOCKED';
   avatarUrl: string;
   bio: string;
@@ -67,6 +67,13 @@ const DEFAULT_SEED_USERS: MemoryUser[] = [
 let memoryUsers: MemoryUser[] = [...DEFAULT_SEED_USERS];
 
 export class AuthController {
+  /**
+   * Internal helper for testing only - bypasses HTTP response leakage
+   */
+  public static _getOtpRecordForTest(target: string): string | undefined {
+    return otpStore.get(target.toLowerCase())?.code;
+  }
+
   /**
    * Check if username, email, or phone is already taken in the database
    */
@@ -279,7 +286,7 @@ export class AuthController {
         verified: false
       });
 
-      console.log(`🔑 [OTP DISPATCH] Generated OTP: ${otpCode} for ${cleanTarget} (${channel.toUpperCase()})`);
+      console.log(`🔑 [OTP DISPATCH] Generated OTP for ${cleanTarget} (${channel.toUpperCase()})`);
 
       res.status(200).json({
         success: true,
@@ -288,7 +295,6 @@ export class AuthController {
           : `SMS verification OTP sent to ${cleanTarget}.`,
         target: cleanTarget,
         channel: isEmail ? 'EMAIL' : 'SMS',
-        otpPreview: otpCode, // Provided for instant demo and local testing
         expiresInSeconds: 600
       });
     } catch (err: any) {
@@ -433,6 +439,11 @@ export class AuthController {
       // Hash password securely
       const passwordHash = await bcrypt.hash(cleanPassword, 10);
 
+      // 🔒 STRICT SECURITY ROLE LOCK:
+      // General public registration is strictly locked to 'USER'.
+      // Specialized roles like 'TRAVEL_AGENCY', 'ADMIN', 'SUPER_ADMIN' cannot be injected by client!
+      const LOCKED_REGISTRATION_ROLE: UserRole = 'USER';
+
       // Create new user record
       const newUserId = `user_${Date.now()}`;
       const newMemoryUser: MemoryUser = {
@@ -442,7 +453,7 @@ export class AuthController {
         email: cleanEmail,
         phone: cleanPhone,
         passwordHash,
-        role: (req.body.role as any) || 'USER',
+        role: LOCKED_REGISTRATION_ROLE,
         avatarUrl: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 50)}?auto=format&fit=crop&w=400&q=80`,
         bio: 'Just joined Travel Buddy! Ready for adventures ✈️🎒',
         createdAt: new Date().toISOString()
@@ -459,7 +470,7 @@ export class AuthController {
             email: cleanEmail,
             phone: cleanPhone,
             passwordHash,
-            role: (req.body.role as any) || 'USER',
+            role: LOCKED_REGISTRATION_ROLE,
             status: 'ACTIVE',
             avatarUrl: newMemoryUser.avatarUrl,
             bio: newMemoryUser.bio
@@ -727,8 +738,7 @@ export class AuthController {
         username: foundUser.username,
         target,
         maskedTarget,
-        channel: isEmail ? 'EMAIL' : 'SMS',
-        otpPreview: otpCode
+        channel: isEmail ? 'EMAIL' : 'SMS'
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });

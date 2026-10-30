@@ -9,6 +9,13 @@ export class AdminOperationsController {
   private static activeAdminOtps = new Map<string, { otp: string; expiresAt: number; adminData: any }>();
 
   /**
+   * Internal helper for testing only - bypasses HTTP response leakage
+   */
+  public static _getActiveAdminOtpForTesting(email: string): string | undefined {
+    return AdminOperationsController.activeAdminOtps.get(email.toLowerCase())?.otp;
+  }
+
+  /**
    * Centralized helper to verify super admin credentials
    */
   private static async verifyAdminCredentials(
@@ -118,8 +125,7 @@ export class AdminOperationsController {
         success: true,
         message: `Two-Factor verification code has been dispatched to ${cleanEmail}.`,
         email: cleanEmail,
-        expiresInSeconds: 600,
-        otpPreview: otp
+        expiresInSeconds: 600
       });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
@@ -146,11 +152,10 @@ export class AdminOperationsController {
 
       const record = AdminOperationsController.activeAdminOtps.get(cleanEmail);
 
-      // Support master fallback OTP '492810' or matched active OTP
-      const isMasterTestOtp = cleanOtp === '492810' && (cleanEmail === 'admin@travelbuddy.com' || cleanEmail === 'admin@enteyathra.com');
+      // Verify active OTP from stored records (backdoor master OTP completely removed)
       const isStoredOtpValid = record && record.otp === cleanOtp && record.expiresAt > Date.now();
 
-      if (!isMasterTestOtp && !isStoredOtpValid) {
+      if (!isStoredOtpValid) {
         res.status(400).json({
           success: false,
           message: 'Invalid or expired OTP code. Please enter the correct 6-digit code sent to your email.'

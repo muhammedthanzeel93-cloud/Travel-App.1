@@ -1,5 +1,7 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
+import jwt from 'jsonwebtoken';
+import { config } from '../../core/config/index.js';
 import { Post, Reel, Story, DirectMessage } from './social.model.js';
 
 const MOCK_POSTS = [
@@ -309,9 +311,26 @@ export class SocialController {
 
   public static async getDirectMessages(req: Request, res: Response): Promise<void> {
     try {
+      // 🔒 Extract current user from Bearer Token to prevent IDOR leaks
+      let currentUserId: string | null = null;
+      const authHeader = req.headers.authorization;
+      if (authHeader && authHeader.startsWith('Bearer ')) {
+        try {
+          const decoded: any = jwt.verify(authHeader.split(' ')[1], config.jwtSecret);
+          currentUserId = decoded?.id || null;
+        } catch {
+          // Token invalid
+        }
+      }
+
       if (mongoose.connection.readyState === 1) {
         try {
-          const messages = await DirectMessage.find({})
+          // Scope query to messages where the authenticated user is either sender or recipient
+          const query = currentUserId
+            ? { $or: [{ senderId: currentUserId }, { recipientId: currentUserId }] }
+            : { _id: { $exists: false } }; // Return empty set if unauthenticated
+
+          const messages = await DirectMessage.find(query)
             .populate('senderId', 'name username avatarUrl')
             .sort({ createdAt: -1 });
 
@@ -338,7 +357,8 @@ export class SocialController {
         }
       }
 
-      res.status(200).json({ success: true, messages: MOCK_DMS });
+      // If user is authenticated, return scoped mock DMs, otherwise empty
+      res.status(200).json({ success: true, messages: currentUserId ? MOCK_DMS : [] });
     } catch (err: any) {
       res.status(500).json({ success: false, message: err.message });
     }

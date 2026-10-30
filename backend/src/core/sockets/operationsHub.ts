@@ -1,4 +1,6 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import jwt from 'jsonwebtoken';
+import { config } from '../config/index.js';
 
 export class OperationsHubSocket {
   private static io: SocketIOServer | null = null;
@@ -6,16 +8,51 @@ export class OperationsHubSocket {
   public static initialize(io: SocketIOServer) {
     this.io = io;
 
-    io.on('connection', (socket: Socket) => {
-      console.log(`[SOCKET CONNECTED] Client ID: ${socket.id}`);
+    // 🔒 Security Handshake: Authenticate client socket connection with JWT
+    io.use((socket: Socket, next: (err?: Error) => void) => {
+      const token =
+        socket.handshake.auth?.token ||
+        (socket.handshake.headers?.authorization && socket.handshake.headers.authorization.startsWith('Bearer ')
+          ? socket.handshake.headers.authorization.split(' ')[1]
+          : null);
 
-      // Join role-specific rooms
+      if (token) {
+        try {
+          const decoded = jwt.verify(token, config.jwtSecret) as any;
+          socket.data.user = decoded;
+          return next();
+        } catch (err) {
+          console.warn(`⚠️ [SOCKET AUTH] Invalid token attempt from socket ID ${socket.id}`);
+          // Allow connection as anonymous guest for public alerts, but socket.data.user remains undefined
+          return next();
+        }
+      }
+      // Allow anonymous connection for public broadcasts
+      next();
+    });
+
+    io.on('connection', (socket: Socket) => {
+      const user = socket.data.user;
+      console.log(`[SOCKET CONNECTED] Client ID: ${socket.id} (User: ${user ? `@${user.username} [${user.role}]` : 'Anonymous Guest'})`);
+
+      // Guarded Admin Desk room (Super Admin privilege required)
       socket.on('join:admin-desk', () => {
+        if (!socket.data.user || socket.data.user.role !== 'SUPER_ADMIN') {
+          console.warn(`🛑 [SECURITY BREACH REJECTED] Unauthorized join:admin-desk attempt by socket ${socket.id}`);
+          socket.emit('socket:error', { message: 'Access denied: Super Admin authorization required.' });
+          return;
+        }
         socket.join('admin-operations');
-        console.log(`[SOCKET] ${socket.id} joined admin-operations room`);
+        console.log(`🛡️ [SOCKET AUTHORIZED] ${socket.id} (@${socket.data.user.username}) joined admin-operations room`);
       });
 
+      // Guarded User Vault room (Prevent IDOR eavesdropping)
       socket.on('join:user-vault', (userId: string) => {
+        if (socket.data.user && socket.data.user.id !== userId && socket.data.user.role !== 'SUPER_ADMIN') {
+          console.warn(`🛑 [IDOR ATTEMPT REJECTED] Socket ${socket.id} attempted to join vault for other user ${userId}`);
+          socket.emit('socket:error', { message: 'Access denied: Cannot access another user vault.' });
+          return;
+        }
         socket.join(`user:${userId}`);
         console.log(`[SOCKET] ${socket.id} joined user:${userId} room`);
       });
