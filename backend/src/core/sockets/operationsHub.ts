@@ -1,6 +1,9 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
+import { User } from '../../features/auth/user.model.js';
+
+const userRoom = (userId: string) => `user:${userId}`;
 
 export class OperationsHubSocket {
   private static io: SocketIOServer | null = null;
@@ -22,34 +25,54 @@ export class OperationsHubSocket {
       }
 
       try {
-        const decoded = jwt.verify(token, config.jwtSecret) as any;
-        socket.data.user = decoded;
-        return next();
-      } catch (err: any) {
-        console.warn(`🛑 [SOCKET REJECTED] Token verification failed for socket ${socket.id}: ${err.message}`);
-        return next(new Error('Authentication failed: Invalid or expired token'));
+        const decoded = jwt.verify(token, config.jwtSecret) as { id?: string; sessionVersion?: number };
+        if (!decoded.id) return next(new Error('Authentication required.'));
+        void User.findById(decoded.id).select('username role status sessionVersion').then((user) => {
+          if (!user || user.status !== 'ACTIVE' || (decoded.sessionVersion ?? 0) !== (user.sessionVersion ?? 0)) {
+            next(new Error('Authentication required.'));
+            return;
+          }
+          socket.data.user = {
+            id: user._id.toString(), username: user.username, role: user.role,
+            sessionVersion: user.sessionVersion ?? 0
+          };
+          next();
+        }).catch(() => next(new Error('Authentication required.')));
+      } catch {
+        return next(new Error('Authentication required.'));
       }
     });
 
     io.on('connection', (socket: Socket) => {
       const user = socket.data.user;
-      console.log(`[SOCKET CONNECTED] Client ID: ${socket.id} (User: @${user?.username || 'Authenticated'} [${user?.role || 'USER'}])`);
+      if (user?.id) void socket.join(userRoom(user.id));
 
       // Guarded Admin Desk room (Super Admin privilege strictly required)
-      socket.on('join:admin-desk', () => {
-        if (!socket.data.user || socket.data.user.role !== 'SUPER_ADMIN') {
-          console.warn(`🛑 [SECURITY BREACH REJECTED] Unauthorized join:admin-desk attempt by socket ${socket.id}`);
-          socket.emit('socket:error', { message: 'Access denied: Super Admin authorization required.' });
+      socket.on('join:admin-desk', async () => {
+        const identity = socket.data.user as { id?: string; sessionVersion?: number } | undefined;
+        if (!identity?.id) {
+          socket.emit('socket:error', { message: 'Access denied.' });
+          return;
+        }
+        const current = await User.findOne({
+          _id: identity.id, role: 'SUPER_ADMIN', status: 'ACTIVE', sessionVersion: identity.sessionVersion
+        }).select('_id');
+        if (!current) {
+          socket.emit('socket:error', { message: 'Access denied.' });
+          socket.disconnect(true);
           return;
         }
         socket.join('admin-operations');
-        console.log(`🛡️ [SOCKET AUTHORIZED] ${socket.id} (@${socket.data.user.username}) joined admin-operations room`);
       });
 
       socket.on('disconnect', () => {
         console.log(`[SOCKET DISCONNECTED] Client ID: ${socket.id}`);
       });
     });
+  }
+
+  public static revokeUserSessions(userId: string): void {
+    this.io?.in(userRoom(userId)).disconnectSockets(true);
   }
 
   /**

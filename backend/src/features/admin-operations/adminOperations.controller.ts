@@ -6,6 +6,7 @@ import { User } from '../auth/user.model.js';
 import { consumeVerifiedOtp, createAndDispatchOtp, verifyOtp } from '../auth/otp.service.js';
 import { clearSessionCookie, getRequestToken, setSessionCookie } from '../auth/session.js';
 import { config } from '../../core/config/index.js';
+import { issueSessionToken } from '../auth/token.js';
 
 export class AdminOperationsController {
   private static async findAdmin(username: string, email: string, password: string) {
@@ -53,12 +54,12 @@ export class AdminOperationsController {
         res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
         return;
       }
-      const admin = await User.findOne({ email, role: 'SUPER_ADMIN', status: 'ACTIVE' }).select('username email name role');
+      const admin = await User.findOne({ email, role: 'SUPER_ADMIN', status: 'ACTIVE' }).select('username email name role sessionVersion');
       if (!admin) {
         res.status(401).json({ success: false, message: 'Admin account is unavailable.' });
         return;
       }
-      const token = jwt.sign({ id: admin._id.toString(), username: admin.username, role: admin.role }, config.jwtSecret, { expiresIn: '8h' });
+      const token = issueSessionToken(admin, '8h');
       setSessionCookie(res, token, 8 * 60 * 60);
       res.status(200).json({
         success: true,
@@ -81,10 +82,10 @@ export class AdminOperationsController {
         res.status(401).json({ success: false, valid: false, message: 'Admin session required.' });
         return;
       }
-      const decoded = jwt.verify(token, config.jwtSecret) as { id?: string; role?: string };
+      const decoded = jwt.verify(token, config.jwtSecret) as { id?: string; role?: string; sessionVersion?: number };
       if (!decoded.id || !mongoose.isValidObjectId(decoded.id)) throw new Error('Invalid subject');
-      const admin = await User.findOne({ _id: decoded.id, role: 'SUPER_ADMIN', status: 'ACTIVE' }).select('username email role');
-      if (!admin) throw new Error('Admin unavailable');
+      const admin = await User.findOne({ _id: decoded.id, role: 'SUPER_ADMIN', status: 'ACTIVE' }).select('username email role sessionVersion');
+      if (!admin || (decoded.sessionVersion ?? 0) !== (admin.sessionVersion ?? 0)) throw new Error('Admin unavailable');
       res.status(200).json({ success: true, valid: true, admin: { username: admin.username, email: admin.email, role: admin.role } });
     } catch {
       clearSessionCookie(res);

@@ -8,8 +8,9 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "admin:bootstrap": "tsx src/scripts/bootstrap-admin.ts",
-    "test": "tsx test/social.test.ts",
-    "test:all": "tsx test/auth.test.ts && tsx test/social.test.ts"
+    "social:migrate": "tsx src/scripts/migrate-social-content.ts",
+    "test": "tsx test/security-regression.test.ts",
+    "test:all": "tsx test/security-regression.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
@@ -20,6 +21,8 @@
     "helmet": "^8.3.0",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.9.5",
+    "rate-limit-redis": "^6.0.2",
+    "redis": "^6.3.1",
     "socket.io": "^4.8.1",
     "uuid": "^11.0.5"
   },

@@ -252,25 +252,7 @@ export default function HomePage() {
     setSignupLoading(true);
 
     try {
-      // 1. Check duplicate username, email, phone availability
-      const availRes = await fetchFromApi<{ available: boolean; field?: string; message?: string }>(
-        '/auth/check-availability',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            username: cleanUsername,
-            ...(signupChannel === 'email' ? { email: target } : { phone: target })
-          })
-        }
-      );
-
-      if (!availRes.available) {
-        setSignupError(availRes.message || 'This credential is already taken. Please choose another.');
-        setSignupLoading(false);
-        return;
-      }
-
-      // 2. Send OTP
+      // Send a generic registration challenge response without disclosing whether an account exists.
       const otpRes = await fetchFromApi<{
         success: boolean;
         message?: string;
@@ -287,11 +269,7 @@ export default function HomePage() {
       if (otpRes.success) {
         setSignupOtpTimer(60);
         setSignupStep(2);
-        setSignupSuccessMsg(
-          signupChannel === 'email'
-            ? `Verification code sent to ${target}`
-            : `SMS verification code sent to ${target}`
-        );
+        setSignupSuccessMsg('If this contact can be used, a verification code will be sent.');
       } else {
         setSignupError(otpRes.message || 'Failed to dispatch OTP. Please try again.');
       }

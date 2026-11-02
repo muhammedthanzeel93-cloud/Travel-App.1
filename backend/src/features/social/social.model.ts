@@ -1,33 +1,45 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
-export interface IComment {
-  userId: mongoose.Types.ObjectId;
-  userName: string;
-  userAvatar: string;
-  text: string;
-  createdAt: Date;
-  likes: mongoose.Types.ObjectId[];
-  replies?: {
-    userId: mongoose.Types.ObjectId;
-    userName: string;
-    text: string;
-    createdAt: Date;
-  }[];
-}
-
 export interface IPost extends Document {
   userId: mongoose.Types.ObjectId;
   images: string[];
   caption: string;
   locationName: string;
   city: string;
-  likes: mongoose.Types.ObjectId[];
-  likesCount: number;
-  comments: IComment[];
   commentsCount: number;
-  savedBy: mongoose.Types.ObjectId[];
   createdAt: Date;
   updatedAt: Date;
+}
+
+export interface IPostComment extends Document {
+  postId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  userName: string;
+  userAvatar: string;
+  text: string;
+  createdAt: Date;
+}
+
+export type PostReactionType = 'LIKE' | 'SAVE';
+
+export interface IPostReaction extends Document {
+  postId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  type: PostReactionType;
+  createdAt: Date;
+}
+
+export type StoryResponseKind = 'POLL_VOTE' | 'QA_ANSWER';
+
+export interface IStoryResponse extends Document {
+  storyId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  kind: StoryResponseKind;
+  choice?: 'A' | 'B';
+  responseText?: string;
+  sourceKey: string;
+  expiresAt: Date;
+  createdAt: Date;
 }
 
 export interface IReel extends Document {
@@ -55,12 +67,11 @@ export interface IStory extends Document {
     question: string;
     optionA: { text: string; votes: number };
     optionB: { text: string; votes: number };
-    votedUserIds: { userId: mongoose.Types.ObjectId; choice: 'A' | 'B' }[];
   };
   qaSticker?: {
     prompt: string;
-    responses: { userId: mongoose.Types.ObjectId; responseText: string }[];
   };
+  qaResponseCount: number;
   expiresAt: Date;
   viewers: mongoose.Types.ObjectId[];
   createdAt: Date;
@@ -88,28 +99,7 @@ const PostSchema = new Schema<IPost>(
     caption: { type: String, required: true },
     locationName: { type: String, default: '' },
     city: { type: String, default: '' },
-    likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    likesCount: { type: Number, default: 0 },
-    comments: [
-      {
-        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-        userName: String,
-        userAvatar: String,
-        text: String,
-        createdAt: { type: Date, default: Date.now },
-        likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-        replies: [
-          {
-            userId: { type: Schema.Types.ObjectId, ref: 'User' },
-            userName: String,
-            text: String,
-            createdAt: { type: Date, default: Date.now }
-          }
-        ]
-      }
-    ],
-    commentsCount: { type: Number, default: 0 },
-    savedBy: [{ type: Schema.Types.ObjectId, ref: 'User' }]
+    commentsCount: { type: Number, default: 0 }
   },
   { timestamps: true }
 );
@@ -140,23 +130,12 @@ const StorySchema = new Schema<IStory>(
     pollSticker: {
       question: String,
       optionA: { text: String, votes: { type: Number, default: 0 } },
-      optionB: { text: String, votes: { type: Number, default: 0 } },
-      votedUserIds: [
-        {
-          userId: { type: Schema.Types.ObjectId, ref: 'User' },
-          choice: { type: String, enum: ['A', 'B'] }
-        }
-      ]
+      optionB: { text: String, votes: { type: Number, default: 0 } }
     },
     qaSticker: {
-      prompt: String,
-      responses: [
-        {
-          userId: { type: Schema.Types.ObjectId, ref: 'User' },
-          responseText: String
-        }
-      ]
+      prompt: String
     },
+    qaResponseCount: { type: Number, default: 0, min: 0 },
     expiresAt: {
       type: Date,
       default: () => new Date(Date.now() + 24 * 60 * 60 * 1000)
@@ -187,13 +166,51 @@ const DirectMessageSchema = new Schema<IDirectMessage>(
   { timestamps: true }
 );
 
-PostSchema.index({ createdAt: -1 });
+PostSchema.index({ createdAt: -1, _id: -1 });
 ReelSchema.index({ createdAt: -1 });
 StorySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+const PostCommentSchema = new Schema<IPostComment>({
+  postId: { type: Schema.Types.ObjectId, ref: 'Post', required: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  userName: { type: String, required: true, maxlength: 100 },
+  userAvatar: { type: String, default: '', maxlength: 2048 },
+  text: { type: String, required: true, maxlength: 2000 },
+  createdAt: { type: Date, default: Date.now, required: true }
+}, { versionKey: false });
+PostCommentSchema.index({ postId: 1, createdAt: -1, _id: -1 });
+
+const PostReactionSchema = new Schema<IPostReaction>({
+  postId: { type: Schema.Types.ObjectId, ref: 'Post', required: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  type: { type: String, enum: ['LIKE', 'SAVE'], required: true },
+  createdAt: { type: Date, default: Date.now }
+}, { versionKey: false });
+PostReactionSchema.index({ postId: 1, userId: 1, type: 1 }, { unique: true });
+PostReactionSchema.index({ postId: 1, type: 1 });
+PostReactionSchema.index({ userId: 1, type: 1, createdAt: -1 });
+
+const StoryResponseSchema = new Schema<IStoryResponse>({
+  storyId: { type: Schema.Types.ObjectId, ref: 'Story', required: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  kind: { type: String, enum: ['POLL_VOTE', 'QA_ANSWER'], required: true },
+  choice: { type: String, enum: ['A', 'B'] },
+  responseText: { type: String, maxlength: 2000 },
+  sourceKey: { type: String, required: true, unique: true },
+  expiresAt: { type: Date, required: true },
+  createdAt: { type: Date, default: Date.now }
+}, { versionKey: false });
+StoryResponseSchema.index({ storyId: 1, userId: 1 }, { unique: true, partialFilterExpression: { kind: 'POLL_VOTE' } });
+StoryResponseSchema.index({ storyId: 1, kind: 1, createdAt: -1, _id: -1 });
+StoryResponseSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
 DirectMessageSchema.index({ senderId: 1, createdAt: -1 });
 DirectMessageSchema.index({ recipientId: 1, createdAt: -1 });
 
 export const Post = mongoose.model<IPost>('Post', PostSchema);
+export const PostComment = mongoose.model<IPostComment>('PostComment', PostCommentSchema);
+export const PostReaction = mongoose.model<IPostReaction>('PostReaction', PostReactionSchema);
+export const StoryResponse = mongoose.model<IStoryResponse>('StoryResponse', StoryResponseSchema);
 export const Reel = mongoose.model<IReel>('Reel', ReelSchema);
 export const Story = mongoose.model<IStory>('Story', StorySchema);
 export const DirectMessage = mongoose.model<IDirectMessage>('DirectMessage', DirectMessageSchema);

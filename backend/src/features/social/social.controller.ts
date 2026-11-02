@@ -2,7 +2,33 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware.js';
 import { User } from '../auth/user.model.js';
-import { DirectMessage, Post, Reel, Story } from './social.model.js';
+import { DirectMessage, Post, PostComment, PostReaction, Reel, Story, StoryResponse } from './social.model.js';
+
+const DEFAULT_PAGE_SIZE = 20;
+const MAX_PAGE_SIZE = 30;
+const MAX_COMMENTS_PER_POST = 1000;
+const MAX_QA_RESPONSES_PER_STORY = 5000;
+
+function pageSizeFrom(value: unknown): number {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed > 0 ? Math.min(parsed, MAX_PAGE_SIZE) : DEFAULT_PAGE_SIZE;
+}
+
+function encodeCursor(date: Date, id: mongoose.Types.ObjectId): string {
+  return Buffer.from(`${date.toISOString()}|${id.toString()}`).toString('base64url');
+}
+
+function decodeCursor(value: unknown): { date: Date; id: mongoose.Types.ObjectId } | null {
+  if (typeof value !== 'string' || value.length > 128) return null;
+  try {
+    const decoded = Buffer.from(value, 'base64url').toString('utf8');
+    const separator = decoded.lastIndexOf('|');
+    const date = new Date(decoded.slice(0, separator));
+    const id = decoded.slice(separator + 1);
+    if (separator < 0 || Number.isNaN(date.getTime()) || !mongoose.isValidObjectId(id)) return null;
+    return { date, id: new mongoose.Types.ObjectId(id) };
+  } catch { return null; }
+}
 
 const mediaUrlIsValid = (value: unknown): value is string => {
   if (typeof value !== 'string' || value.length > 2048) return false;
@@ -17,20 +43,40 @@ const getActor = (req: AuthenticatedRequest) => req.user;
 export class SocialController {
   public static async getFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const posts = await Post.find({}).populate('userId', 'name username avatarUrl isVerified').sort({ createdAt: -1 }).limit(100);
-      res.status(200).json({ success: true, count: posts.length, posts: posts.map((post: any) => ({
+      const limit = pageSizeFrom(req.query.limit);
+      const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : null;
+      if (req.query.cursor && !cursor) {
+        res.status(400).json({ success: false, message: 'Invalid feed cursor.' });
+        return;
+      }
+      const filter: any = {};
+      if (cursor) filter.$or = [
+        { createdAt: { $lt: cursor.date } },
+        { createdAt: cursor.date, _id: { $lt: cursor.id } }
+      ];
+      const queried = await Post.find(filter)
+        .select('userId images caption locationName commentsCount createdAt')
+        .populate('userId', 'name username avatarUrl isVerified')
+        .sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
+      const hasMore = queried.length > limit;
+      const posts = queried.slice(0, limit);
+      const postIds = posts.map((post: any) => post._id);
+      const [reactionCounts, likedIds] = await Promise.all([
+        PostReaction.aggregate([{ $match: { postId: { $in: postIds }, type: 'LIKE' } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
+        req.user ? PostReaction.find({ postId: { $in: postIds }, userId: req.user.id, type: 'LIKE' }).select('postId').lean() : Promise.resolve([])
+      ]);
+      const counts = new Map(reactionCounts.map((item: any) => [item._id.toString(), item.count]));
+      const liked = new Set(likedIds.map((item: any) => item.postId.toString()));
+      const lastPost: any = posts[posts.length - 1];
+      res.status(200).json({ success: true, count: posts.length, nextCursor: hasMore && lastPost ? encodeCursor(lastPost.createdAt, lastPost._id) : null, posts: posts.map((post: any) => ({
         _id: post._id.toString(),
         user: {
           name: post.userId?.name || post.userId?.username || 'Community Explorer',
           avatar: post.userId?.avatarUrl || '', handle: '@' + (post.userId?.username || 'traveler')
         },
         images: post.images || [], caption: post.caption || '', locationName: post.locationName || '',
-        likesCount: post.likesCount || 0, isLiked: Boolean(req.user && post.likes.some((id: any) => id.toString() === req.user?.id)),
-        commentsCount: post.commentsCount || 0,
-        comments: (post.comments || []).map((comment: any) => ({
-          userName: comment.userName || 'Community Explorer', userAvatar: comment.userAvatar || '',
-          text: comment.text, createdAt: comment.createdAt
-        })), createdAt: post.createdAt
+        likesCount: counts.get(post._id.toString()) || 0, isLiked: liked.has(post._id.toString()),
+        commentsCount: post.commentsCount || 0, comments: [], createdAt: post.createdAt
       })) });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to load the travel feed.' });
@@ -64,19 +110,70 @@ export class SocialController {
         res.status(400).json({ success: false, message: 'Valid post and account are required.' });
         return;
       }
-      const unlike = await Post.updateOne({ _id: postId, likes: userId }, { $pull: { likes: userId }, $inc: { likesCount: -1 } });
-      if (!unlike.matchedCount) {
-        await Post.updateOne({ _id: postId, likes: { $ne: userId } }, { $addToSet: { likes: userId }, $inc: { likesCount: 1 } });
+      const liked = req.body?.liked;
+      if (typeof liked !== 'boolean') {
+        res.status(400).json({ success: false, message: 'A liked boolean is required.' });
+        return;
       }
-      const post = await Post.findById(postId).select('likes likesCount');
+      const post = await Post.exists({ _id: postId });
       if (!post) {
         res.status(404).json({ success: false, message: 'Post not found.' });
         return;
       }
-      const isLiked = post.likes.some((id) => id.toString() === userId);
-      res.status(200).json({ success: true, postId, isLiked, newLikesCount: post.likesCount });
+      const filter = { postId: new mongoose.Types.ObjectId(postId), userId: new mongoose.Types.ObjectId(userId), type: 'LIKE' as const };
+      if (liked) {
+        try {
+          await PostReaction.updateOne(filter, { $setOnInsert: filter }, { upsert: true });
+        } catch (error: any) {
+          if (error?.code !== 11000) throw error;
+        }
+      } else {
+        await PostReaction.deleteOne(filter);
+      }
+      const newLikesCount = await PostReaction.countDocuments({ postId, type: 'LIKE' });
+      res.status(200).json({ success: true, postId, isLiked: liked, newLikesCount });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to update like.' });
+    }
+  }
+
+  public static async getComments(req: Request, res: Response): Promise<void> {
+    try {
+      const postId = req.params.postId;
+      if (!mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'A valid post ID is required.' });
+        return;
+      }
+      const limit = pageSizeFrom(req.query.limit);
+      const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : null;
+      if (req.query.cursor && !cursor) {
+        res.status(400).json({ success: false, message: 'Invalid comments cursor.' });
+        return;
+      }
+      const postExists = await Post.exists({ _id: postId });
+      if (!postExists) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      const filter: any = { postId };
+      if (cursor) filter.$or = [
+        { createdAt: { $lt: cursor.date } },
+        { createdAt: cursor.date, _id: { $lt: cursor.id } }
+      ];
+      const queried = await PostComment.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
+      const hasMore = queried.length > limit;
+      const comments = queried.slice(0, limit);
+      const last = comments[comments.length - 1];
+      res.status(200).json({
+        success: true,
+        comments: comments.map((comment: any) => ({
+          id: comment._id.toString(), userName: comment.userName, userAvatar: comment.userAvatar,
+          text: comment.text, createdAt: comment.createdAt
+        })),
+        nextCursor: hasMore && last ? encodeCursor(last.createdAt, last._id) : null
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load comments.' });
     }
   }
 
@@ -94,10 +191,23 @@ export class SocialController {
         res.status(401).json({ success: false, message: 'Account is unavailable.' });
         return;
       }
-      const post = await Post.findByIdAndUpdate(postId, {
-        $push: { comments: { userId, userName: user.name || user.username, userAvatar: user.avatarUrl || '', text: text.trim() } },
-        $inc: { commentsCount: 1 }
-      }, { new: true }).select('commentsCount');
+      const reservation = await Post.updateOne({ _id: postId, commentsCount: { $lt: MAX_COMMENTS_PER_POST } }, { $inc: { commentsCount: 1 } });
+      if (!reservation.matchedCount) {
+        const exists = await Post.exists({ _id: postId });
+        if (!exists) {
+          res.status(404).json({ success: false, message: 'Post not found.' });
+          return;
+        }
+        res.status(409).json({ success: false, message: 'This post has reached its comment limit.' });
+        return;
+      }
+      try {
+        await PostComment.create({ postId, userId, userName: user.name || user.username, userAvatar: user.avatarUrl || '', text: text.trim() });
+      } catch (error) {
+        await Post.updateOne({ _id: postId, commentsCount: { $gt: 0 } }, { $inc: { commentsCount: -1 } });
+        throw error;
+      }
+      const post = await Post.findById(postId).select('commentsCount').lean();
       if (!post) {
         res.status(404).json({ success: false, message: 'Post not found.' });
         return;
@@ -116,14 +226,22 @@ export class SocialController {
         res.status(400).json({ success: false, message: 'Valid post and account are required.' });
         return;
       }
-      const removed = await Post.updateOne({ _id: postId, savedBy: userId }, { $pull: { savedBy: userId } });
-      if (!removed.matchedCount) await Post.updateOne({ _id: postId }, { $addToSet: { savedBy: userId } });
-      const post = await Post.findById(postId).select('savedBy');
+      const saved = req.body?.saved;
+      if (typeof saved !== 'boolean') {
+        res.status(400).json({ success: false, message: 'A saved boolean is required.' });
+        return;
+      }
+      const post = await Post.findById(postId).select('_id');
       if (!post) {
         res.status(404).json({ success: false, message: 'Post not found.' });
         return;
       }
-      res.status(200).json({ success: true, isSaved: post.savedBy.some((id) => id.toString() === userId) });
+      const filter = { postId: new mongoose.Types.ObjectId(postId), userId: new mongoose.Types.ObjectId(userId), type: 'SAVE' as const };
+      if (saved) {
+        try { await PostReaction.updateOne(filter, { $setOnInsert: filter }, { upsert: true }); }
+        catch (error: any) { if (error?.code !== 11000) throw error; }
+      } else await PostReaction.deleteOne(filter);
+      res.status(200).json({ success: true, isSaved: saved });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to update saved post.' });
     }
@@ -163,7 +281,13 @@ export class SocialController {
       const stories = await Story.find({ expiresAt: { $gt: new Date() } }).populate('userId', 'name username avatarUrl').sort({ createdAt: -1 }).limit(100);
       res.status(200).json({ success: true, stories: stories.map((story: any) => ({
         _id: story._id.toString(), user: { name: story.userId?.name || story.userId?.username || 'Explorer', avatar: story.userId?.avatarUrl || '', hasUnseenStory: true },
-        mediaUrl: story.mediaUrl, poll: story.pollSticker, qaPrompt: story.qaSticker?.prompt, expiresAt: story.expiresAt
+        mediaUrl: story.mediaUrl,
+        poll: story.pollSticker ? {
+          question: story.pollSticker.question,
+          optionA: { text: story.pollSticker.optionA?.text || '', votes: story.pollSticker.optionA?.votes || 0 },
+          optionB: { text: story.pollSticker.optionB?.text || '', votes: story.pollSticker.optionB?.votes || 0 }
+        } : undefined,
+        qaPrompt: story.qaSticker?.prompt, expiresAt: story.expiresAt
       })) });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to load stories.' });
@@ -194,11 +318,24 @@ export class SocialController {
         res.status(400).json({ success: false, message: 'A valid story and poll choice are required.' });
         return;
       }
+      const story = await Story.findOne({ _id: storyId, expiresAt: { $gt: new Date() }, 'pollSticker.question': { $exists: true } }).select('expiresAt');
+      if (!story) {
+        res.status(409).json({ success: false, message: 'Poll is unavailable or you have already voted.' });
+        return;
+      }
+      try {
+        await StoryResponse.create({ storyId, userId, kind: 'POLL_VOTE', choice, sourceKey: `poll:${storyId}:${userId}`, expiresAt: story.expiresAt });
+      } catch (error: any) {
+        if (error?.code === 11000) {
+          res.status(409).json({ success: false, message: 'Poll is unavailable or you have already voted.' });
+          return;
+        }
+        throw error;
+      }
       const path = choice === 'A' ? 'pollSticker.optionA.votes' : 'pollSticker.optionB.votes';
-      const result = await Story.updateOne({ _id: storyId, expiresAt: { $gt: new Date() }, 'pollSticker.question': { $exists: true }, 'pollSticker.votedUserIds.userId': { $ne: userId } }, {
-        $inc: { [path]: 1 }, $push: { 'pollSticker.votedUserIds': { userId, choice } }
-      });
-      if (!result.modifiedCount) {
+      const updated = await Story.updateOne({ _id: storyId, expiresAt: { $gt: new Date() }, 'pollSticker.question': { $exists: true } }, { $inc: { [path]: 1 } });
+      if (!updated.modifiedCount) {
+        await StoryResponse.deleteOne({ storyId, userId, kind: 'POLL_VOTE' }).catch(() => undefined);
         res.status(409).json({ success: false, message: 'Poll is unavailable or you have already voted.' });
         return;
       }
@@ -217,11 +354,21 @@ export class SocialController {
         res.status(400).json({ success: false, message: 'A valid response up to 2000 characters is required.' });
         return;
       }
-      const story = await Story.findOneAndUpdate({ _id: storyId, expiresAt: { $gt: new Date() }, 'qaSticker.prompt': { $exists: true } }, {
-        $push: { 'qaSticker.responses': { userId, responseText: responseText.trim() } }
-      }, { new: true }).select('_id');
+      const story = await Story.findOneAndUpdate({ _id: storyId, expiresAt: { $gt: new Date() }, 'qaSticker.prompt': { $exists: true }, qaResponseCount: { $lt: MAX_QA_RESPONSES_PER_STORY } }, {
+        $inc: { qaResponseCount: 1 }
+      }, { new: true }).select('expiresAt');
       if (!story) {
         res.status(404).json({ success: false, message: 'Question sticker not found.' });
+        return;
+      }
+      try {
+        await StoryResponse.create({
+          storyId, userId, kind: 'QA_ANSWER', responseText: responseText.trim(),
+          sourceKey: `qa:${new mongoose.Types.ObjectId().toString()}`, expiresAt: story.expiresAt
+        });
+      } catch {
+        await Story.updateOne({ _id: storyId, qaResponseCount: { $gt: 0 } }, { $inc: { qaResponseCount: -1 } });
+        res.status(500).json({ success: false, message: 'Unable to submit story response.' });
         return;
       }
       res.status(201).json({ success: true });

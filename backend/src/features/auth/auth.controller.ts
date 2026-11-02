@@ -1,12 +1,12 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { User, IUser, UserRole } from './user.model.js';
-import { config } from '../../core/config/index.js';
 import { AuthChallenge } from './authChallenge.model.js';
 import { consumeVerifiedOtp, createAndDispatchOtp, verifyOtp } from './otp.service.js';
 import { clearSessionCookie, setSessionCookie } from './session.js';
+import { issueSessionToken } from './token.js';
+import { OperationsHubSocket } from '../../core/sockets/operationsHub.js';
 
 const isDbConnected = () => mongoose.connection.readyState === 1;
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
@@ -24,47 +24,6 @@ function requireDatabase(res: Response): boolean {
 }
 
 export class AuthController {
-  public static async checkAvailability(req: Request, res: Response): Promise<void> {
-    if (!requireDatabase(res)) return;
-    try {
-      const { username, email, phone } = req.body;
-      const checks: Array<[string, any]> = [];
-      if (username) checks.push(['username', { username: normalizeUsername(username) }]);
-      if (email) checks.push(['email', { email: normalizeEmail(email) }]);
-      if (phone) checks.push(['phone', { phone: normalizePhone(phone) }]);
-      for (const [field, query] of checks) {
-        if (await User.exists(query)) {
-          res.status(200).json({ available: false, field, message: 'This account identifier is already in use.' });
-          return;
-        }
-      }
-      res.status(200).json({ available: true, message: 'Credentials available.' });
-    } catch {
-      res.status(500).json({ success: false, message: 'Unable to check account availability.' });
-    }
-  }
-
-  public static async checkStatus(req: Request, res: Response): Promise<void> {
-    if (!requireDatabase(res)) return;
-    try {
-      const identifier = String(req.query.username || req.query.identifier || req.body?.identifier || req.body?.username || '').trim();
-      if (!identifier) {
-        res.status(400).json({ success: false, message: 'Username or identifier is required.' });
-        return;
-      }
-      const user = await User.findOne({ $or: [
-        { username: normalizeUsername(identifier) }, { email: normalizeEmail(identifier) }, { phone: normalizePhone(identifier) }
-      ] }).select('username role status');
-      if (!user) {
-        res.status(404).json({ success: false, message: 'User not found.' });
-        return;
-      }
-      res.status(200).json({ success: true, username: user.username, role: user.role, status: user.status, isBlocked: user.status === 'BLOCKED' });
-    } catch {
-      res.status(500).json({ success: false, message: 'Unable to check account status.' });
-    }
-  }
-
   public static async sendOtp(req: Request, res: Response): Promise<void> {
     if (!requireDatabase(res)) return;
     try {
@@ -76,25 +35,19 @@ export class AuthController {
       }
       const isEmail = target.includes('@');
       const normalized = isEmail ? normalizeEmail(target) : normalizePhone(target);
+      let shouldDispatch = true;
       if (type === 'REGISTRATION') {
-        const exists = await User.exists(isEmail ? { email: normalized } : { phone: normalized });
-        if (exists) {
-          res.status(409).json({ success: false, message: 'An account already exists for this contact.' });
-          return;
-        }
+        shouldDispatch = !(await User.exists(isEmail ? { email: normalized } : { phone: normalized }));
       }
       if (type === 'PASSWORD_RESET') {
         const user = await User.findOne({ $or: [{ email: normalized }, { phone: normalized }] }).select('email phone');
-        if (!user) {
-          res.status(200).json({ success: true, message: 'If the account exists, a verification code will be sent.' });
-          return;
-        }
+        shouldDispatch = Boolean(user);
       }
-      await createAndDispatchOtp(normalized, type, isEmail ? 'email' : 'sms');
-      res.status(200).json({ success: true, message: 'Verification code dispatched.', target: normalized, channel: isEmail ? 'EMAIL' : 'SMS', expiresInSeconds: 600 });
+      if (shouldDispatch) await createAndDispatchOtp(normalized, type, isEmail ? 'email' : 'sms');
+      res.status(200).json({ success: true, message: 'If the contact can be used for this request, a verification code will be sent.' });
     } catch (error) {
       console.error('[OTP] Delivery failed:', error instanceof Error ? error.message : 'unknown error');
-      res.status(503).json({ success: false, message: 'Verification delivery is unavailable. Contact the administrator.' });
+      res.status(200).json({ success: true, message: 'If the contact can be used for this request, a verification code will be sent.' });
     }
   }
 
@@ -152,12 +105,12 @@ export class AuthController {
         avatarUrl: undefined, bio: ''
       });
       await consumeVerifiedOtp(target, 'REGISTRATION');
-      const token = jwt.sign({ id: user._id.toString(), username: user.username, role: user.role }, config.jwtSecret, { expiresIn: '24h' });
+      const token = issueSessionToken(user, '24h');
       setSessionCookie(res, token, 24 * 60 * 60);
       res.status(201).json({ success: true, message: 'Account created successfully.', user: safeUser(user) });
     } catch (error: any) {
       if (error?.code === 11000) {
-        res.status(409).json({ success: false, field: Object.keys(error.keyPattern || {})[0], message: 'An account identifier is already in use.' });
+        res.status(409).json({ success: false, message: 'Unable to create this account. Check the details or try another identifier.' });
         return;
       }
       console.error('[AUTH] Registration failed:', error instanceof Error ? error.message : 'unknown error');
@@ -184,7 +137,7 @@ export class AuthController {
         res.status(403).json({ success: false, blocked: true, message: 'This account is blocked.' });
         return;
       }
-      const token = jwt.sign({ id: user._id.toString(), username: user.username, role: user.role }, config.jwtSecret, { expiresIn: '24h' });
+      const token = issueSessionToken(user, '24h');
       setSessionCookie(res, token, 24 * 60 * 60);
       res.status(200).json({ success: true, message: 'Signed in.', user: safeUser(user) });
     } catch {
@@ -208,7 +161,9 @@ export class AuthController {
       }
       res.status(200).json({ success: true, message: 'If the account exists, a verification code will be sent.' });
     } catch {
-      res.status(503).json({ success: false, message: 'Password reset delivery is unavailable.' });
+      // Keep the response identical when delivery fails so provider state cannot
+      // reveal whether the identifier belongs to an account.
+      res.status(200).json({ success: true, message: 'If the account exists, a verification code will be sent.' });
     }
   }
 
@@ -235,7 +190,9 @@ export class AuthController {
         return;
       }
       user.passwordHash = await bcrypt.hash(password, 12);
+      user.sessionVersion = (user.sessionVersion || 0) + 1;
       await user.save();
+      OperationsHubSocket.revokeUserSessions(user._id.toString());
       res.status(200).json({ success: true, message: 'Password reset successfully.', username: user.username });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to reset password.' });
@@ -292,7 +249,13 @@ export class AuthController {
         res.status(400).json({ success: false, message: 'A valid user ID or username is required.' });
         return;
       }
-      const result = await User.deleteOne({ $or: query, role: { $ne: 'SUPER_ADMIN' } });
+      const targetUser = await User.findOne({ $or: query, role: { $ne: 'SUPER_ADMIN' } }).select('_id');
+      if (!targetUser) {
+        res.status(404).json({ success: false, message: 'User not found or protected.' });
+        return;
+      }
+      const result = await User.deleteOne({ _id: targetUser._id });
+      if (result.deletedCount) OperationsHubSocket.revokeUserSessions(targetUser._id.toString());
       res.status(result.deletedCount ? 200 : 404).json({ success: result.deletedCount > 0, message: result.deletedCount ? 'User deleted.' : 'User not found or protected.' });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to delete user.' });
@@ -318,6 +281,7 @@ export class AuthController {
       }
       user.status = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
       await user.save();
+      OperationsHubSocket.revokeUserSessions(user._id.toString());
       res.status(200).json({ success: true, status: user.status, message: 'User status updated.' });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to update user status.' });

@@ -23,8 +23,19 @@ interface FeedPost {
   comments: FeedComment[];
 }
 
+interface CommentPage {
+  success: boolean;
+  comments: FeedComment[];
+  nextCursor: string | null;
+}
+
 export default function TravelSocialFeedPage() {
   const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [feedCursor, setFeedCursor] = useState<string | null>(null);
+  const [commentsByPost, setCommentsByPost] = useState<Record<string, FeedComment[]>>({});
+  const [commentCursors, setCommentCursors] = useState<Record<string, string | null>>({});
+  const [savedPosts, setSavedPosts] = useState<Record<string, boolean>>({});
+  const [loadingComments, setLoadingComments] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [caption, setCaption] = useState('');
@@ -33,16 +44,18 @@ export default function TravelSocialFeedPage() {
   const [busy, setBusy] = useState(false);
   const user = getUserSession();
 
-  const loadFeed = useCallback(async () => {
-    setLoading(true);
+  const loadFeed = useCallback(async (cursor?: string) => {
+    if (!cursor) setLoading(true);
     setError(null);
     try {
-      const data = await fetchFromApi<{ posts: FeedPost[] }>('/social/feed');
-      setPosts(data.posts || []);
+      const query = cursor ? `?limit=20&cursor=${encodeURIComponent(cursor)}` : '?limit=20';
+      const data = await fetchFromApi<{ posts: FeedPost[]; nextCursor: string | null }>(`/social/feed${query}`);
+      setPosts((current) => cursor ? [...current, ...(data.posts || [])] : (data.posts || []));
+      setFeedCursor(data.nextCursor || null);
     } catch (err: any) {
       setError(err.message || 'Unable to load the feed.');
     } finally {
-      setLoading(false);
+      if (!cursor) setLoading(false);
     }
   }, []);
 
@@ -69,8 +82,9 @@ export default function TravelSocialFeedPage() {
 
   const toggleLike = async (post: FeedPost) => {
     try {
+      const desired = !post.isLiked;
       const result = await fetchFromApi<{ isLiked: boolean; newLikesCount: number }>(`/social/posts/${post._id}/like`, {
-        method: 'POST', body: JSON.stringify({})
+        method: 'POST', body: JSON.stringify({ liked: desired })
       });
       setPosts((current) => current.map((item) => item._id === post._id
         ? { ...item, isLiked: result.isLiked, likesCount: result.newLikesCount }
@@ -81,10 +95,29 @@ export default function TravelSocialFeedPage() {
   };
 
   const toggleSave = async (postId: string) => {
+    const desired = !savedPosts[postId];
     try {
-      await fetchFromApi(`/social/posts/${postId}/save`, { method: 'POST', body: JSON.stringify({}) });
+      await fetchFromApi(`/social/posts/${postId}/save`, { method: 'POST', body: JSON.stringify({ saved: desired }) });
+      setSavedPosts((current) => ({ ...current, [postId]: desired }));
     } catch (err: any) {
       setError(err.message || 'Sign in to save this post.');
+    }
+  };
+
+  const loadComments = async (postId: string, cursor?: string) => {
+    setLoadingComments((current) => ({ ...current, [postId]: true }));
+    try {
+      const query = cursor ? `?limit=20&cursor=${encodeURIComponent(cursor)}` : '?limit=20';
+      const data = await fetchFromApi<CommentPage>(`/social/posts/${postId}/comments${query}`);
+      setCommentsByPost((current) => ({
+        ...current,
+        [postId]: cursor ? [...(current[postId] || []), ...data.comments] : data.comments
+      }));
+      setCommentCursors((current) => ({ ...current, [postId]: data.nextCursor }));
+    } catch (err: any) {
+      setError(err.message || 'Unable to load comments.');
+    } finally {
+      setLoadingComments((current) => ({ ...current, [postId]: false }));
     }
   };
 
@@ -95,7 +128,8 @@ export default function TravelSocialFeedPage() {
     try {
       await fetchFromApi(`/social/posts/${postId}/comments`, { method: 'POST', body: JSON.stringify({ text }) });
       setCommentDrafts((current) => ({ ...current, [postId]: '' }));
-      await loadFeed();
+      await loadComments(postId);
+      setPosts((current) => current.map((post) => post._id === postId ? { ...post, commentsCount: post.commentsCount + 1 } : post));
     } catch (err: any) {
       setError(err.message || 'Sign in to comment.');
     }
@@ -142,10 +176,12 @@ export default function TravelSocialFeedPage() {
             <div className="flex items-center gap-4">
               <button onClick={() => void toggleLike(post)} className="inline-flex gap-1.5 items-center text-sm text-slate-200"><Heart className={post.isLiked ? 'w-5 h-5 fill-rose-500 text-rose-500' : 'w-5 h-5'} />{post.likesCount}</button>
               <span className="inline-flex gap-1.5 items-center text-sm text-slate-400"><MessageCircle className="w-5 h-5" />{post.commentsCount}</span>
-              <button onClick={() => void toggleSave(post._id)} aria-label="Save post" className="ml-auto text-slate-400"><Bookmark className="w-5 h-5" /></button>
+              <button onClick={() => void toggleSave(post._id)} aria-label={savedPosts[post._id] ? 'Unsave post' : 'Save post'} className="ml-auto text-slate-400"><Bookmark className={savedPosts[post._id] ? 'w-5 h-5 fill-amber-400 text-amber-400' : 'w-5 h-5'} /></button>
             </div>
             <div className="space-y-2 border-t border-slate-800 pt-3">
-              {(post.comments || []).map((comment, index) => <p key={index} className="text-xs text-slate-300"><strong>{comment.userName}</strong> {comment.text}</p>)}
+              {commentsByPost[post._id]?.map((comment, index) => <p key={`${comment.createdAt || ''}-${index}`} className="text-xs text-slate-300"><strong>{comment.userName}</strong> {comment.text}</p>)}
+              {post.commentsCount > 0 && !commentsByPost[post._id] && <button onClick={() => void loadComments(post._id)} disabled={loadingComments[post._id]} className="text-xs text-amber-400">{loadingComments[post._id] ? 'Loading comments…' : `View ${post.commentsCount} comments`}</button>}
+              {commentCursors[post._id] && <button onClick={() => void loadComments(post._id, commentCursors[post._id] || undefined)} disabled={loadingComments[post._id]} className="text-xs text-amber-400">Load more comments</button>}
               <form onSubmit={(event) => void addComment(event, post._id)} className="flex gap-2">
                 <input value={commentDrafts[post._id] || ''} onChange={(e) => setCommentDrafts((current) => ({ ...current, [post._id]: e.target.value }))}
                   maxLength={2000} placeholder={user ? 'Add a comment…' : 'Sign in to comment'} className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white" />
@@ -155,6 +191,7 @@ export default function TravelSocialFeedPage() {
           </div>
         </article>
       ))}
+      {!loading && feedCursor && <button onClick={() => void loadFeed(feedCursor)} className="w-full rounded-xl border border-slate-700 bg-slate-900 py-3 text-sm text-amber-400">Load more posts</button>}
     </div>
   );
 }

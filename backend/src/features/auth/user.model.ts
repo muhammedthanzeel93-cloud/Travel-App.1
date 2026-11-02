@@ -10,6 +10,7 @@ export interface IUser extends Document {
   passwordHash: string;
   role: UserRole;
   status: 'ACTIVE' | 'BLOCKED';
+  sessionVersion: number;
   avatarUrl?: string;
   bio?: string;
   agencyDetails?: {
@@ -74,6 +75,7 @@ const UserSchema = new Schema<IUser>(
       default: 'USER' 
     },
     status: { type: String, enum: ['ACTIVE', 'BLOCKED'], default: 'ACTIVE' },
+    sessionVersion: { type: Number, default: 0, min: 0 },
     avatarUrl: { type: String, default: '' },
     bio: { type: String, default: '' },
     agencyDetails: {

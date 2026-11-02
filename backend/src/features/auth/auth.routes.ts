@@ -4,13 +4,6 @@ import { authenticateToken, requireSuperAdmin } from '../../middlewares/auth.mid
 
 const router = Router();
 
-// Availability check for unique username, email, phone
-router.post('/check-availability', AuthController.checkAvailability);
-
-// Check user active/blocked status
-router.get('/check-status', AuthController.checkStatus);
-router.post('/check-status', AuthController.checkStatus);
-
 // Send OTP via Email or SMS
 router.post('/send-otp', AuthController.sendOtp);
 
