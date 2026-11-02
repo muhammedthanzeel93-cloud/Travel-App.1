@@ -71,10 +71,6 @@ export class AdminOperationsController {
     }
   }
 
-  public static async loginAdmin(req: Request, res: Response): Promise<void> {
-    await AdminOperationsController.validateAdminCredentials(req, res);
-  }
-
   public static async verifyAdminToken(req: Request, res: Response): Promise<void> {
     try {
       const token = getRequestToken(req);
