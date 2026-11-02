@@ -86,8 +86,8 @@ const PostSchema = new Schema<IPost>(
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     images: [{ type: String, required: true }],
     caption: { type: String, required: true },
-    locationName: { type: String, default: 'Burj Khalifa, Dubai' },
-    city: { type: String, default: 'Dubai' },
+    locationName: { type: String, default: '' },
+    city: { type: String, default: '' },
     likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     likesCount: { type: Number, default: 0 },
     comments: [
@@ -120,8 +120,8 @@ const ReelSchema = new Schema<IReel>(
     videoUrl: { type: String, required: true },
     thumbnailUrl: { type: String, required: true },
     caption: { type: String, required: true },
-    audioTrackName: { type: String, default: 'Original Audio - Desert Sunset Beats' },
-    locationName: { type: String, default: 'Dubai Desert Safari' },
+    audioTrackName: { type: String, default: '' },
+    locationName: { type: String, default: '' },
     likes: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     likesCount: { type: Number, default: 0 },
     commentsCount: { type: Number, default: 0 },
@@ -186,6 +186,12 @@ const DirectMessageSchema = new Schema<IDirectMessage>(
   },
   { timestamps: true }
 );
+
+PostSchema.index({ createdAt: -1 });
+ReelSchema.index({ createdAt: -1 });
+StorySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+DirectMessageSchema.index({ senderId: 1, createdAt: -1 });
+DirectMessageSchema.index({ recipientId: 1, createdAt: -1 });
 
 export const Post = mongoose.model<IPost>('Post', PostSchema);
 export const Reel = mongoose.model<IReel>('Reel', ReelSchema);

@@ -8,11 +8,11 @@ export interface IHotel extends Document {
   starRating: number;
   contactEmail: string;
   contactPhone: string;
-  documents: {
-    tradeLicenseUrl: string;
-    fireSafetyNocUrl: string;
-    taxCertificateGstUrl: string;
-    propertyDeedUrl: string;
+  documents?: {
+    tradeLicenseUrl?: string;
+    fireSafetyNocUrl?: string;
+    taxCertificateGstUrl?: string;
+    propertyDeedUrl?: string;
   };
   verificationStatus: 'PENDING_VERIFICATION' | 'VERIFIED' | 'REJECTED' | 'SUSPENDED';
   rejectionReason?: string;
@@ -55,7 +55,6 @@ export interface IRoom extends Document {
 }
 
 export interface IRoomBooking extends Document {
-  orderId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
   hotelId: mongoose.Types.ObjectId;
   roomId: mongoose.Types.ObjectId;
@@ -70,6 +69,10 @@ export interface IRoomBooking extends Document {
   actualCheckOutTime?: Date;
   escrowStatus: 'HELD_UNTIL_24H_POST_CHECKIN' | 'HELD_IN_ESCROW' | 'RELEASED_TO_HOST' | 'RELEASED_TO_PARTNER' | 'REFUNDED';
   hotelVoucherCode: string;
+  bookingReference: string;
+  verifiedPrice: number;
+  platformCommission: number;
+  hostPayout: number;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -84,10 +87,10 @@ const HotelSchema = new Schema<IHotel>(
     contactEmail: { type: String, required: true },
     contactPhone: { type: String, required: true },
     documents: {
-      tradeLicenseUrl: { type: String, default: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=600&q=80' },
-      fireSafetyNocUrl: { type: String, default: 'https://images.unsplash.com/photo-1589829545856-d10d557cf95f?auto=format&fit=crop&w=600&q=80' },
-      taxCertificateGstUrl: { type: String, default: 'https://images.unsplash.com/photo-1450133064473-71024230f91b?auto=format&fit=crop&w=600&q=80' },
-      propertyDeedUrl: { type: String, default: 'https://images.unsplash.com/photo-1554224154-26032ffc0d07?auto=format&fit=crop&w=600&q=80' }
+      tradeLicenseUrl: String,
+      fireSafetyNocUrl: String,
+      taxCertificateGstUrl: String,
+      propertyDeedUrl: String
     },
     verificationStatus: {
       type: String,
@@ -136,7 +139,6 @@ const RoomSchema = new Schema<IRoom>(
 
 const RoomBookingSchema = new Schema<IRoomBooking>(
   {
-    orderId: { type: Schema.Types.ObjectId, ref: 'Booking', required: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
     hotelId: { type: Schema.Types.ObjectId, ref: 'Hotel', required: true },
     roomId: { type: Schema.Types.ObjectId, ref: 'Room', required: true },
@@ -158,10 +160,17 @@ const RoomBookingSchema = new Schema<IRoomBooking>(
       enum: ['HELD_UNTIL_24H_POST_CHECKIN', 'HELD_IN_ESCROW', 'RELEASED_TO_HOST', 'RELEASED_TO_PARTNER', 'REFUNDED'],
       default: 'HELD_UNTIL_24H_POST_CHECKIN'
     },
-    hotelVoucherCode: { type: String, required: true }
+    hotelVoucherCode: { type: String, required: true, unique: true, sparse: true },
+    bookingReference: { type: String, required: true, unique: true, sparse: true },
+    verifiedPrice: { type: Number, required: true, min: 0 },
+    platformCommission: { type: Number, required: true, min: 0 },
+    hostPayout: { type: Number, required: true, min: 0 }
   },
   { timestamps: true }
 );
+
+RoomBookingSchema.index({ userId: 1, createdAt: -1 });
+RoomBookingSchema.index({ roomId: 1, checkInDate: 1, checkOutDate: 1, checkInStatus: 1 });
 
 export const Hotel = mongoose.model<IHotel>('Hotel', HotelSchema);
 export const Room = mongoose.model<IRoom>('Room', RoomSchema);

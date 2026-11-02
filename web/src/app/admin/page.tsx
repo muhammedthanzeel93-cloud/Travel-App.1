@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { setAdminSession, getAdminSession, performAdminLogout } from '@/features/admin/auth';
+import { setAdminSession, performAdminLogout } from '@/features/admin/auth';
 import {
   ShieldAlert,
   ShieldCheck,
@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   KeyRound,
   RotateCcw,
-  Sparkles,
   Clock,
   ExternalLink
 } from 'lucide-react';
@@ -37,7 +36,6 @@ export default function AdminLoginPage() {
 
   // Step 2: 2FA Email OTP State
   const [otp, setOtp] = useState('');
-  const [sentOtpPreview, setSentOtpPreview] = useState<string>('492810');
   const [countdown, setCountdown] = useState<number>(60);
   const [isResending, setIsResending] = useState(false);
   const [pendingAdminData, setPendingAdminData] = useState<any>(null);
@@ -52,22 +50,27 @@ export default function AdminLoginPage() {
 
   // Detect existing session or logout param on client mount (Non-blocking)
   useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
+    const checkSession = async () => {
+      try {
         const params = new URLSearchParams(window.location.search);
         if (params.get('logout') === 'success') {
           setSuccessMessage('You have been successfully signed out from the Admin Panel.');
           return;
         }
-
-        const session = getAdminSession();
-        if (session) {
+        const response = await fetch('/api/admin/verify', { credentials: 'include' });
+        const result = await response.json();
+        if (response.ok && result.valid && result.admin) {
+          const session = { ...result.admin, authenticatedAt: new Date().toISOString() };
+          setAdminSession(session);
           setExistingSession(session);
+        } else {
+          setExistingSession(null);
         }
+      } catch {
+        setExistingSession(null);
       }
-    } catch {
-      // ignore
-    }
+    };
+    void checkSession();
   }, []);
 
   // Resend OTP countdown timer
@@ -101,7 +104,7 @@ export default function AdminLoginPage() {
 
     const cleanUsername = username.trim();
     const cleanEmail = email.trim().toLowerCase();
-    const cleanPassword = password.trim();
+    const cleanPassword = password;
 
     if (!cleanUsername || !cleanEmail || !cleanPassword) {
       setErrorMessage('Username, email address, and password are all required.');
@@ -112,15 +115,9 @@ export default function AdminLoginPage() {
 
     try {
       let isCredentialsValid = false;
-      let generatedOtp = Math.floor(100000 + Math.random() * 900000).toString();
       let adminPayload: any = null;
 
-      // 1. Try Backend 2FA Validation API first (ports 5000, 5001, 4550)
-      const candidateUrls = [
-        'http://localhost:5000/api/v1/admin/login/validate',
-        'http://localhost:5001/api/v1/admin/login/validate',
-        'http://localhost:4550/api/v1/admin/login/validate'
-      ];
+      const candidateUrls = ['/api/admin/login/validate'];
 
       for (const apiUrl of candidateUrls) {
         if (isCredentialsValid) break;
@@ -128,6 +125,7 @@ export default function AdminLoginPage() {
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               username: cleanUsername,
               email: cleanEmail,
@@ -139,14 +137,11 @@ export default function AdminLoginPage() {
             const resJson = await response.json();
             if (resJson.success) {
               isCredentialsValid = true;
-              if (resJson.otpPreview) {
-                generatedOtp = resJson.otpPreview;
-              }
               adminPayload = {
-                username: cleanUsername,
-                email: cleanEmail,
-                name: 'Travel Buddy Super Admin',
-                role: 'SUPER_ADMIN'
+                username: resJson.admin?.username || cleanUsername,
+                email: resJson.admin?.email || cleanEmail,
+                name: resJson.admin?.name || cleanUsername,
+                role: resJson.admin?.role || 'SUPER_ADMIN'
               };
               break;
             } else {
@@ -164,7 +159,6 @@ export default function AdminLoginPage() {
 
       if (isCredentialsValid && adminPayload) {
         setPendingAdminData(adminPayload);
-        setSentOtpPreview(generatedOtp);
         setStep('OTP');
         setOtp('');
         setCountdown(60);
@@ -186,24 +180,15 @@ export default function AdminLoginPage() {
     setErrorMessage(null);
 
     const cleanEmail = email.trim().toLowerCase();
-    const newOtp = Math.floor(100000 + Math.random() * 900000).toString();
-
     try {
-      try {
-        await fetch('http://localhost:5000/api/v1/admin/login/validate', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            username: username.trim(),
-            email: cleanEmail,
-            password: password.trim()
-          })
-        });
-      } catch {
-        // offline fallback
-      }
-
-      setSentOtpPreview(newOtp);
+      const response = await fetch('/api/admin/login/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ username: username.trim(), email: cleanEmail, password })
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Unable to resend verification code.');
       setCountdown(60);
       setSuccessMessage(`A new 6-digit OTP code has been re-dispatched to ${cleanEmail}.`);
     } catch (err: any) {
@@ -237,15 +222,9 @@ export default function AdminLoginPage() {
 
     try {
       let isOtpVerified = false;
-      let sessionToken = 'jwt_super_admin_2fa_travel_buddy_' + Date.now();
       const cleanEmail = email.trim().toLowerCase();
 
-      // 1. Try Backend 2FA OTP verification API (ports 5000, 5001, 4550)
-      const candidateUrls = [
-        'http://localhost:5000/api/v1/admin/login/verify-otp',
-        'http://localhost:5001/api/v1/admin/login/verify-otp',
-        'http://localhost:4550/api/v1/admin/login/verify-otp'
-      ];
+      const candidateUrls = ['/api/admin/login/verify-otp'];
 
       for (const apiUrl of candidateUrls) {
         if (isOtpVerified) break;
@@ -253,43 +232,32 @@ export default function AdminLoginPage() {
           const response = await fetch(apiUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
             body: JSON.stringify({
               email: cleanEmail,
               otp: cleanOtp
             })
           });
 
-          if (response.ok) {
-            const resJson = await response.json();
-            if (resJson.success) {
-              isOtpVerified = true;
-              if (resJson.token) sessionToken = resJson.token;
-              break;
-            } else {
-              setErrorMessage(resJson.message || 'Invalid OTP code.');
-            }
+          const resJson = await response.json();
+          if (response.ok && resJson.success) {
+            isOtpVerified = true;
+            setPendingAdminData(resJson.admin);
+            break;
           }
         } catch {
           // offline check
         }
       }
 
-      // 2. Offline / Standalone verification
-      if (!isOtpVerified && !errorMessage) {
-        if (cleanOtp === sentOtpPreview || cleanOtp === '492810') {
-          isOtpVerified = true;
-        } else {
-          setErrorMessage('Invalid OTP code. Please enter the correct 6-digit code sent to your email.');
-        }
-      }
+      if (!isOtpVerified) setErrorMessage('Invalid or expired verification code.');
 
       if (isOtpVerified) {
         const adminData = {
-          username: pendingAdminData?.username || username.trim() || 'admin',
+          username: pendingAdminData?.username || username.trim(),
           email: cleanEmail,
-          name: pendingAdminData?.name || 'Travel Buddy Super Admin',
-          role: 'SUPER_ADMIN' as const,
-          token: sessionToken,
+          name: pendingAdminData?.name || username.trim(),
+          role: pendingAdminData?.role || 'SUPER_ADMIN',
           authenticatedAt: new Date().toISOString()
         };
 
@@ -515,23 +483,6 @@ export default function AdminLoginPage() {
               <div className="font-mono font-bold text-sm text-white truncate px-1">
                 {email}
               </div>
-            </div>
-
-            {/* 2FA Security Notification Pill */}
-            <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
-                <span className="text-amber-300 font-medium truncate">
-                  Dispatched Code: <span className="font-mono font-extrabold text-white tracking-widest">{sentOtpPreview}</span>
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOtp(sentOtpPreview)}
-                className="px-2.5 py-1 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black transition-colors shrink-0 cursor-pointer shadow-sm"
-              >
-                Auto-Fill Code
-              </button>
             </div>
 
             {/* 6-Digit OTP Input */}

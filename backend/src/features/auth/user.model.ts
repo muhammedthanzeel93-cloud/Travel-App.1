@@ -67,18 +67,15 @@ const UserSchema = new Schema<IUser>(
       sparse: true,
       trim: true
     },
-    passwordHash: { type: String, required: true },
+    passwordHash: { type: String, required: true, select: false },
     role: { 
       type: String, 
       enum: ['USER', 'TRAVELER', 'TRAVEL_AGENCY', 'HOTEL_HOST', 'ADMIN', 'SUPER_ADMIN'], 
       default: 'USER' 
     },
     status: { type: String, enum: ['ACTIVE', 'BLOCKED'], default: 'ACTIVE' },
-    avatarUrl: {
-      type: String,
-      default: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80'
-    },
-    bio: { type: String, default: 'Global nomad & cultural explorer ✈️🌍' },
+    avatarUrl: { type: String, default: '' },
+    bio: { type: String, default: '' },
     agencyDetails: {
       agencyName: { type: String },
       licenseNumber: { type: String },

@@ -13,6 +13,7 @@ export async function fetchFromApi<T = any>(endpoint: string, options: RequestIn
       const url = `${baseUrl}${endpoint}`;
       const res = await fetch(url, {
         ...options,
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
           ...(options.headers || {})

@@ -1,151 +1,129 @@
 import { Request, Response } from 'express';
+import { randomBytes } from 'node:crypto';
+import mongoose from 'mongoose';
+import { AuthenticatedRequest } from '../../middlewares/auth.middleware.js';
 import { Hotel, Room, RoomBooking } from './stay.model.js';
 
-const MOCK_HOTELS = [
-  {
-    _id: 'hotel_1',
-    name: 'Address Downtown Dubai',
-    city: 'Dubai',
-    address: 'Downtown Dubai, Sheikh Mohammed bin Rashid Blvd',
-    starRating: 5,
-    verificationStatus: 'VERIFIED',
-    bannerImages: [
-      'https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1200&q=80'
-    ],
-    amenities: ['Infinity Pool facing Burj Khalifa', 'Luxury Spa', 'Free High-Speed WiFi', 'Airport Chauffeur'],
-    rooms: [
-      {
-        _id: 'room_101',
-        roomType: 'Deluxe Fountain View Suite',
-        basePricePerNight: 1250,
-        photosWithHighlights: [
-          {
-            url: 'https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=800&q=80',
-            label: 'Direct Burj Fountain View 🌊',
-            isApprovedBadge: true
-          },
-          {
-            url: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
-            label: 'Deep Soaking Jacuzzi Tub 🛁',
-            isApprovedBadge: true
-          },
-          {
-            url: 'https://images.unsplash.com/photo-1618773928121-c32242e63f39?auto=format&fit=crop&w=800&q=80',
-            label: 'King Orthopedic Bed 🛏️',
-            isApprovedBadge: true
-          }
-        ],
-        packages: [
-          {
-            packageName: '3-Day Luxury City Package',
-            durationNights: 3,
-            includedAmenities: ['Daily International Buffet Breakfast', 'Burj Khalifa Fast-Track Entry', 'AED 200 Spa Voucher'],
-            packagePrice: 3450,
-            discountPercentage: 15
-          }
-        ]
-      }
-    ]
-  },
-  {
-    _id: 'hotel_2',
-    name: 'The Raviz Kadavu Luxury Resort',
-    city: 'Calicut',
-    address: 'NH 17, Calicut Bypass Road, Azhinjillam',
-    starRating: 5,
-    verificationStatus: 'VERIFIED',
-    bannerImages: [
-      'https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?auto=format&fit=crop&w=1200&q=80'
-    ],
-    amenities: ['Chaliyar River View', 'Ayurveda Spa', 'Infinity Pool', 'Houseboat Dining'],
-    rooms: [
-      {
-        _id: 'room_201',
-        roomType: 'Heritage Riverview Cottage',
-        basePricePerNight: 4800,
-        photosWithHighlights: [
-          {
-            url: 'https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=800&q=80',
-            label: 'Open-to-Sky Rain Shower 🚿',
-            isApprovedBadge: true
-          }
-        ],
-        packages: [
-          {
-            packageName: 'Ayurvedic Rejuvenation 2-Night Stay',
-            durationNights: 2,
-            includedAmenities: ['Daily Abhyanga Herbal Massage', 'Traditional Kerala Sadya Breakfast', 'Evening River Cruise'],
-            packagePrice: 11999,
-            discountPercentage: 12
-          }
-        ]
-      }
-    ]
-  }
-];
+const isValidDate = (value: unknown): value is string => typeof value === 'string' && !Number.isNaN(Date.parse(value));
 
 export class StaysController {
-  public static async getHotels(req: Request, res: Response): Promise<void> {
+  public static async getHotels(_req: Request, res: Response): Promise<void> {
     try {
-      res.status(200).json({ success: true, count: MOCK_HOTELS.length, hotels: MOCK_HOTELS });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const hotels = await Hotel.find({ verificationStatus: 'VERIFIED' }).sort({ name: 1 }).limit(200).lean();
+      const rooms = await Room.find({ hotelId: { $in: hotels.map((hotel) => hotel._id) }, isAvailable: true }).lean();
+      const roomsByHotel = new Map<string, any[]>();
+      for (const room of rooms) {
+        const key = room.hotelId.toString();
+        roomsByHotel.set(key, [...(roomsByHotel.get(key) || []), room]);
+      }
+      const result = hotels.map((hotel) => ({ ...hotel, _id: hotel._id.toString(), rooms: roomsByHotel.get(hotel._id.toString()) || [] }));
+      res.status(200).json({ success: true, count: result.length, hotels: result });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load available stays.' });
     }
   }
 
-  public static async bookStayPackage(req: Request, res: Response): Promise<void> {
+  public static async bookStayPackage(req: AuthenticatedRequest, res: Response): Promise<void> {
+    const userId = req.user?.id;
+    let reservedRoomId: string | undefined;
     try {
-      const { hotelId, roomId, packageId } = req.body;
-
-      // 🔒 Server-Side Price Verification: Do NOT trust client-supplied packagePrice!
-      let verifiedPackagePrice = 3450; // default standard benchmark
-      const targetHotel = MOCK_HOTELS.find((h) => h._id === hotelId);
-      const targetRoom = targetHotel?.rooms.find((r) => r._id === roomId);
-
-      // 🔒 Concurrency & Inventory Guard: Atomic double-booking prevention
-      if (targetRoom) {
-        if ((targetRoom as any).availableCount !== undefined && (targetRoom as any).availableCount <= 0) {
-          res.status(409).json({
-            success: false,
-            message: 'This room is currently fully booked. Please select another room or date.'
-          });
-          return;
-        }
-        if ((targetRoom as any).availableCount !== undefined) {
-          (targetRoom as any).availableCount--;
-        }
-
-        if (packageId) {
-          const pkg = targetRoom.packages?.find((p) => p.packageName === packageId);
-          if (pkg) {
-            verifiedPackagePrice = pkg.packagePrice;
-          }
-        } else if (targetRoom.packages && targetRoom.packages.length > 0) {
-          verifiedPackagePrice = targetRoom.packages[0].packagePrice;
-        } else if (targetRoom.basePricePerNight) {
-          verifiedPackagePrice = targetRoom.basePricePerNight;
-        }
+      const { hotelId, roomId, packageId, checkInDate, checkOutDate, numberOfGuests = 1, specialRequests = '' } = req.body || {};
+      if (!userId || !mongoose.isValidObjectId(hotelId) || !mongoose.isValidObjectId(roomId) || !isValidDate(checkInDate) || !isValidDate(checkOutDate)) {
+        res.status(400).json({ success: false, message: 'Hotel, room, check-in and check-out are required.' });
+        return;
+      }
+      const checkIn = new Date(checkInDate);
+      const checkOut = new Date(checkOutDate);
+      const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / 86400000);
+      if (nights < 1 || nights > 90 || checkIn.getTime() < Date.now() - 86400000 || !Number.isInteger(numberOfGuests) || numberOfGuests < 1 || numberOfGuests > 20 || typeof specialRequests !== 'string' || specialRequests.length > 1000) {
+        res.status(400).json({ success: false, message: 'Booking dates, guest count or special requests are invalid.' });
+        return;
       }
 
-      const commissionRate = 0.12;
-      const platformCommission = Math.round(verifiedPackagePrice * commissionRate);
-      const hostPayout = verifiedPackagePrice - platformCommission;
+      const hotel = await Hotel.findOne({ _id: hotelId, verificationStatus: 'VERIFIED' }).select('hostId name');
+      const room = await Room.findOne({ _id: roomId, hotelId, isAvailable: true });
+      if (!hotel || !room || numberOfGuests > room.maxGuests) {
+        res.status(404).json({ success: false, message: 'Stay or room is unavailable.' });
+        return;
+      }
 
-      const bookingRef = `STAY-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
-      const voucherCode = `VCHR-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+      const selectedPackage = packageId ? room.packages.find((item) => item.packageName === String(packageId)) : undefined;
+      if (packageId && !selectedPackage) {
+        res.status(400).json({ success: false, message: 'Selected package is not available for this room.' });
+        return;
+      }
+      if (selectedPackage && nights !== selectedPackage.durationNights) {
+        res.status(400).json({ success: false, message: 'Stay length does not match the selected package.' });
+        return;
+      }
+      const verifiedPrice = selectedPackage ? selectedPackage.packagePrice : room.basePricePerNight * nights;
+      const platformCommission = Math.round(verifiedPrice * 0.12);
+      const hostPayout = verifiedPrice - platformCommission;
 
-      res.status(201).json({
-        success: true,
-        message: 'Stay booked successfully at verified system price.',
-        bookingReference: bookingRef,
-        hotelVoucherCode: voucherCode,
-        verifiedPrice: verifiedPackagePrice,
-        platformCommission,
-        hostPayout
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const reservation = await Room.updateOne({ _id: roomId, hotelId, isAvailable: true, availableCount: { $gt: 0 } }, { $inc: { availableCount: -1 } });
+      if (!reservation.modifiedCount) {
+        res.status(409).json({ success: false, message: 'This room is no longer available.' });
+        return;
+      }
+      reservedRoomId = String(roomId);
+
+      const bookingReference = 'STAY-' + new Date().getFullYear() + '-' + randomBytes(4).toString('hex').toUpperCase();
+      const hotelVoucherCode = 'VCHR-' + randomBytes(5).toString('hex').toUpperCase();
+      try {
+        const booking = await RoomBooking.create({
+          userId, hotelId, roomId, checkInDate: checkIn, checkOutDate: checkOut, nights,
+          numberOfGuests, selectedPackage: selectedPackage?.packageName,
+          specialRequests: specialRequests.trim(), checkInStatus: 'UPCOMING',
+          escrowStatus: 'HELD_UNTIL_24H_POST_CHECKIN', bookingReference, hotelVoucherCode,
+          verifiedPrice, platformCommission, hostPayout
+        });
+        res.status(201).json({
+          success: true, message: 'Stay reservation confirmed.', bookingId: booking._id.toString(),
+          bookingReference, hotelVoucherCode, verifiedPrice, platformCommission, hostPayout
+        });
+        reservedRoomId = undefined;
+      } catch (error) {
+        await Room.updateOne({ _id: reservedRoomId }, { $inc: { availableCount: 1 } });
+        reservedRoomId = undefined;
+        throw error;
+      }
+    } catch (error) {
+      console.error('[STAYS] Booking write failed:', error instanceof Error ? error.message : 'unknown error');
+      if (reservedRoomId) await Room.updateOne({ _id: reservedRoomId }, { $inc: { availableCount: 1 } }).catch(() => {});
+      if (!res.headersSent) res.status(500).json({ success: false, message: 'Unable to complete stay reservation.' });
+    }
+  }
+
+  public static async getMyBookings(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const bookings = await RoomBooking.find({ userId: req.user?.id })
+        .populate('hotelId', 'name city address bannerImages')
+        .populate('roomId', 'roomType')
+        .sort({ createdAt: -1 }).limit(100).lean();
+      res.status(200).json({ success: true, bookings });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load reservations.' });
+    }
+  }
+
+  public static async cancelMyBooking(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const bookingId = req.params.bookingId;
+      if (!mongoose.isValidObjectId(bookingId)) {
+        res.status(400).json({ success: false, message: 'A valid booking ID is required.' });
+        return;
+      }
+      const booking = await RoomBooking.findOneAndUpdate({
+        _id: bookingId, userId: req.user?.id, checkInStatus: 'UPCOMING', checkInDate: { $gt: new Date() }
+      }, { $set: { checkInStatus: 'CANCELLED' } }, { new: true });
+      if (!booking) {
+        res.status(404).json({ success: false, message: 'Upcoming booking was not found or cannot be cancelled.' });
+        return;
+      }
+      await Room.updateOne({ _id: booking.roomId, $expr: { $lt: ['$availableCount', '$totalRoomsCount'] } }, { $inc: { availableCount: 1 } });
+      res.status(200).json({ success: true, message: 'Booking cancelled.' });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to cancel booking.' });
     }
   }
 }

@@ -19,6 +19,12 @@ npm install
 npm run dev
 ```
 
+The backend now requires MongoDB to be available before it starts serving requests. Copy `backend/.env.example` to `backend/.env` and configure the local MongoDB URI and an OTP delivery webhook. The webhook receives a POST JSON payload with `to`, `channel`, `purpose`, `code`, and `expiresInSeconds`; its bearer token must be kept server-side. No OTP is returned to or logged by the application.
+
+To create the first administrator, set the `BOOTSTRAP_ADMIN_*` values in the backend environment, run `npm run admin:bootstrap` once from `backend/`, then clear those bootstrap values. The command refuses to run if a SUPER_ADMIN already exists.
+
+User and admin sessions use an HttpOnly cookie. A new random development signing secret is generated at each backend start unless `JWT_SECRET` is configured; configure a stable secret before using sessions across restarts. Production requires a configured secret of at least 32 characters.
+
 ### Web Frontend
 ```bash
 cd web

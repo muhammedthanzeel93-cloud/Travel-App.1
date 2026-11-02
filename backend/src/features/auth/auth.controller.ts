@@ -4,998 +4,323 @@ import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { User, IUser, UserRole } from './user.model.js';
 import { config } from '../../core/config/index.js';
+import { AuthChallenge } from './authChallenge.model.js';
+import { consumeVerifiedOtp, createAndDispatchOtp, verifyOtp } from './otp.service.js';
+import { clearSessionCookie, setSessionCookie } from './session.js';
 
-interface OtpRecord {
-  code: string;
-  target: string; // email or phone
-  type: 'REGISTRATION' | 'PASSWORD_RESET';
-  expiresAt: number;
-  verified: boolean;
+const isDbConnected = () => mongoose.connection.readyState === 1;
+const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
+const normalizePhone = (value: unknown) => String(value || '').replace(/\s+/g, '').trim();
+const normalizeUsername = (value: unknown) => String(value || '').trim().toLowerCase();
+const safeUser = (user: IUser) => ({
+  id: user._id.toString(), username: user.username, name: user.name, email: user.email, phone: user.phone,
+  role: user.role, status: user.status, avatarUrl: user.avatarUrl, bio: user.bio, createdAt: user.createdAt
+});
+
+function requireDatabase(res: Response): boolean {
+  if (isDbConnected()) return true;
+  res.status(503).json({ success: false, code: 'DATABASE_UNAVAILABLE', message: 'Account services are temporarily unavailable.' });
+  return false;
 }
-
-// In-memory OTP storage
-const otpStore = new Map<string, OtpRecord>();
-
-// Helper to check if MongoDB is connected and ready
-const isDbConnected = (): boolean => mongoose.connection.readyState === 1;
-
-export interface MemoryUser {
-  id: string;
-  username: string;
-  name: string;
-  email?: string;
-  phone?: string;
-  passwordHash: string;
-  role: UserRole;
-  status?: 'ACTIVE' | 'BLOCKED';
-  avatarUrl: string;
-  bio: string;
-  createdAt: string;
-}
-
-// Default Seed Users (Password: Travel@123)
-const DEFAULT_SEED_USERS: MemoryUser[] = [
-  {
-    id: 'user_mem_1',
-    username: 'aisha_dubai',
-    name: 'Aisha Al-Falasi',
-    email: 'aisha@travelbuddy.com',
-    phone: '+971 50 123 4567',
-    passwordHash: bcrypt.hashSync('Travel@123', 10),
-    role: 'TRAVELER',
-    status: 'ACTIVE',
-    avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-    bio: 'Dubai sky-high explorer & sunset photographer 🌅✨',
-    createdAt: new Date().toISOString()
-  },
-  {
-    id: 'user_mem_2',
-    username: 'clt_wanderlust',
-    name: 'Kozhikode Wanderer',
-    email: 'wanderer@enteyathra.com',
-    phone: '+91 98470 54321',
-    passwordHash: bcrypt.hashSync('Travel@123', 10),
-    role: 'TRAVELER',
-    status: 'ACTIVE',
-    avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=400&q=80',
-    bio: 'Backwaters, spices, and mountain trails of Kerala 🌴⛰️',
-    createdAt: new Date().toISOString()
-  }
-];
-
-// Active user repository (retrieved from MongoDB database with initial fallback)
-let memoryUsers: MemoryUser[] = [...DEFAULT_SEED_USERS];
 
 export class AuthController {
-  /**
-   * Internal helper for testing only - bypasses HTTP response leakage
-   */
-  public static _getOtpRecordForTest(target: string): string | undefined {
-    return otpStore.get(target.toLowerCase())?.code;
-  }
-
-  /**
-   * Check if username, email, or phone is already taken in the database
-   */
   public static async checkAvailability(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
       const { username, email, phone } = req.body;
-
-      // 1. Check Username
-      if (username) {
-        const cleanUsername = String(username).trim().toLowerCase();
-
-        // Check in persistent store
-        const inMemoryTaken = memoryUsers.some(
-          (u) => u.username.toLowerCase() === cleanUsername
-        );
-
-        let dbTaken = false;
-        if (isDbConnected()) {
-          try {
-            const existing = await User.findOne({ username: cleanUsername });
-            if (existing) dbTaken = true;
-          } catch {
-            // ignore db offline
-          }
-        }
-
-        if (inMemoryTaken || dbTaken) {
-          res.status(200).json({
-            available: false,
-            field: 'username',
-            message: 'This username is already taken. Please choose another username.'
-          });
+      const checks: Array<[string, any]> = [];
+      if (username) checks.push(['username', { username: normalizeUsername(username) }]);
+      if (email) checks.push(['email', { email: normalizeEmail(email) }]);
+      if (phone) checks.push(['phone', { phone: normalizePhone(phone) }]);
+      for (const [field, query] of checks) {
+        if (await User.exists(query)) {
+          res.status(200).json({ available: false, field, message: 'This account identifier is already in use.' });
           return;
         }
       }
-
-      // 2. Check Email
-      if (email) {
-        const cleanEmail = String(email).trim().toLowerCase();
-
-        const inMemoryTaken = memoryUsers.some(
-          (u) => u.email && u.email.toLowerCase() === cleanEmail
-        );
-
-        let dbTaken = false;
-        if (isDbConnected()) {
-          try {
-            const existing = await User.findOne({ email: cleanEmail });
-            if (existing) dbTaken = true;
-          } catch {
-            // ignore db offline
-          }
-        }
-
-        if (inMemoryTaken || dbTaken) {
-          res.status(200).json({
-            available: false,
-            field: 'email',
-            message: 'An account with this email address already exists. Please sign in or use another email.'
-          });
-          return;
-        }
-      }
-
-      // 3. Check Phone
-      if (phone) {
-        const cleanPhone = String(phone).replace(/\s+/g, '');
-
-        const inMemoryTaken = memoryUsers.some(
-          (u) => u.phone && u.phone.replace(/\s+/g, '') === cleanPhone
-        );
-
-        let dbTaken = false;
-        if (isDbConnected()) {
-          try {
-            const existing = await User.findOne({ phone: cleanPhone });
-            if (existing) dbTaken = true;
-          } catch {
-            // ignore db offline
-          }
-        }
-
-        if (inMemoryTaken || dbTaken) {
-          res.status(200).json({
-            available: false,
-            field: 'phone',
-            message: 'An account with this mobile number already exists. Please sign in or use another number.'
-          });
-          return;
-        }
-      }
-
-      res.status(200).json({
-        available: true,
-        message: 'Credentials available.'
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      res.status(200).json({ available: true, message: 'Credentials available.' });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to check account availability.' });
     }
   }
 
-  /**
-   * Check User Status (Active or Blocked)
-   */
   public static async checkStatus(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const identifier = String(req.query.username || req.query.identifier || req.body?.identifier || req.body?.username || '').trim().toLowerCase();
-
+      const identifier = String(req.query.username || req.query.identifier || req.body?.identifier || req.body?.username || '').trim();
       if (!identifier) {
         res.status(400).json({ success: false, message: 'Username or identifier is required.' });
         return;
       }
-
-      let foundUser: MemoryUser | null = null;
-
-      if (isDbConnected()) {
-        try {
-          const dbUser = await User.findOne({
-            $or: [
-              { username: identifier },
-              { email: identifier },
-              { phone: identifier }
-            ]
-          });
-          if (dbUser) {
-            foundUser = {
-              id: dbUser._id.toString(),
-              username: dbUser.username,
-              name: dbUser.name,
-              email: dbUser.email,
-              phone: dbUser.phone,
-              passwordHash: dbUser.passwordHash,
-              role: dbUser.role as any,
-              status: ((dbUser as any).status as any) || 'ACTIVE',
-              avatarUrl: dbUser.avatarUrl || '',
-              bio: dbUser.bio || '',
-              createdAt: dbUser.createdAt?.toISOString() || new Date().toISOString()
-            };
-          }
-        } catch {}
-      }
-
-      if (!foundUser) {
-        foundUser = memoryUsers.find(
-          (u) =>
-            u.username.toLowerCase() === identifier ||
-            (u.email && u.email.toLowerCase() === identifier) ||
-            (u.phone && u.phone.replace(/\s+/g, '') === identifier)
-        ) || null;
-      }
-
-      if (!foundUser) {
-        res.status(404).json({ success: false, message: 'User not found in database.' });
+      const user = await User.findOne({ $or: [
+        { username: normalizeUsername(identifier) }, { email: normalizeEmail(identifier) }, { phone: normalizePhone(identifier) }
+      ] }).select('username role status');
+      if (!user) {
+        res.status(404).json({ success: false, message: 'User not found.' });
         return;
       }
-
-      res.status(200).json({
-        success: true,
-        username: foundUser.username,
-        role: foundUser.role,
-        status: foundUser.status || 'ACTIVE',
-        isBlocked: foundUser.status === 'BLOCKED'
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      res.status(200).json({ success: true, username: user.username, role: user.role, status: user.status, isBlocked: user.status === 'BLOCKED' });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to check account status.' });
     }
   }
 
-  /**
-   * Dispatch OTP for Registration or Password Reset
-   */
   public static async sendOtp(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { target, type = 'REGISTRATION', channel = 'email' } = req.body;
-
-      if (!target) {
-        res.status(400).json({ success: false, message: 'Target email or phone number is required.' });
+      const target = String(req.body?.target || '').trim();
+      const type = req.body?.type === 'PASSWORD_RESET' ? 'PASSWORD_RESET' : 'REGISTRATION';
+      if (!target || target.length > 254) {
+        res.status(400).json({ success: false, message: 'A valid email or phone number is required.' });
         return;
       }
-
-      const cleanTarget = String(target).trim();
-      const isEmail = cleanTarget.includes('@');
-
-      // For registration: verify uniqueness in database first
+      const isEmail = target.includes('@');
+      const normalized = isEmail ? normalizeEmail(target) : normalizePhone(target);
       if (type === 'REGISTRATION') {
-        const isTaken = isEmail
-          ? memoryUsers.some((u) => u.email?.toLowerCase() === cleanTarget.toLowerCase())
-          : memoryUsers.some((u) => u.phone?.replace(/\s+/g, '') === cleanTarget.replace(/\s+/g, ''));
-
-        if (isTaken) {
-          res.status(400).json({
-            success: false,
-            message: isEmail
-              ? 'An account with this email address already exists in the database.'
-              : 'An account with this mobile number already exists in the database.'
-          });
+        const exists = await User.exists(isEmail ? { email: normalized } : { phone: normalized });
+        if (exists) {
+          res.status(409).json({ success: false, message: 'An account already exists for this contact.' });
           return;
         }
       }
-
-      // Generate 6-digit OTP
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
-
-      otpStore.set(cleanTarget.toLowerCase(), {
-        code: otpCode,
-        target: cleanTarget,
-        type,
-        expiresAt,
-        verified: false
-      });
-
-      console.log(`🔑 [OTP DISPATCH] Generated OTP for ${cleanTarget} (${channel.toUpperCase()})`);
-
-      res.status(200).json({
-        success: true,
-        message: isEmail
-          ? `Verification OTP sent to ${cleanTarget}.`
-          : `SMS verification OTP sent to ${cleanTarget}.`,
-        target: cleanTarget,
-        channel: isEmail ? 'EMAIL' : 'SMS',
-        expiresInSeconds: 600
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      if (type === 'PASSWORD_RESET') {
+        const user = await User.findOne({ $or: [{ email: normalized }, { phone: normalized }] }).select('email phone');
+        if (!user) {
+          res.status(200).json({ success: true, message: 'If the account exists, a verification code will be sent.' });
+          return;
+        }
+      }
+      await createAndDispatchOtp(normalized, type, isEmail ? 'email' : 'sms');
+      res.status(200).json({ success: true, message: 'Verification code dispatched.', target: normalized, channel: isEmail ? 'EMAIL' : 'SMS', expiresInSeconds: 600 });
+    } catch (error) {
+      console.error('[OTP] Delivery failed:', error instanceof Error ? error.message : 'unknown error');
+      res.status(503).json({ success: false, message: 'Verification delivery is unavailable. Contact the administrator.' });
     }
   }
 
-  /**
-   * Verify entered OTP
-   */
   public static async verifyOtp(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { target, otp } = req.body;
-
-      if (!target || !otp) {
-        res.status(400).json({ success: false, message: 'Target identifier and OTP code are required.' });
+      let target = String(req.body?.target || '').trim();
+      const code = String(req.body?.otp || '').trim();
+      const purpose = req.body?.type === 'PASSWORD_RESET' ? 'PASSWORD_RESET' : 'REGISTRATION';
+      if (!target || !/^\d{6}$/.test(code)) {
+        res.status(400).json({ success: false, message: 'Target and six-digit code are required.' });
         return;
       }
-
-      const cleanTarget = String(target).trim().toLowerCase();
-      const cleanOtp = String(otp).trim();
-
-      const record = otpStore.get(cleanTarget);
-
-      if (!record) {
-        res.status(400).json({
-          success: false,
-          message: 'No OTP request found for this email or phone. Please request a new OTP.'
-        });
+      if (purpose === 'PASSWORD_RESET') {
+        const identifier = target.includes('@') ? normalizeEmail(target) : normalizeUsername(target);
+        const resetUser = await User.findOne({ $or: [{ username: identifier }, { email: identifier }, { phone: normalizePhone(target) }] }).select('email phone');
+        target = resetUser?.email || resetUser?.phone || '';
+      }
+      const verified = target ? await verifyOtp(target, purpose, code) : false;
+      if (!verified) {
+        res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
         return;
       }
-
-      if (Date.now() > record.expiresAt) {
-        otpStore.delete(cleanTarget);
-        res.status(400).json({
-          success: false,
-          message: 'OTP has expired. Please request a new code.'
-        });
-        return;
-      }
-
-      if (record.code !== cleanOtp) {
-        res.status(400).json({
-          success: false,
-          message: 'Invalid OTP code. Please check and try again.'
-        });
-        return;
-      }
-
-      // Mark verified
-      record.verified = true;
-      otpStore.set(cleanTarget, record);
-
-      res.status(200).json({
-        success: true,
-        message: 'OTP verified successfully! You can now proceed.',
-        target: cleanTarget,
-        verified: true
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      res.status(200).json({ success: true, verified: true });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to verify code.' });
     }
   }
 
-  /**
-   * Create New User Account and Store in Database (MongoDB + Persistent Storage)
-   */
   public static async register(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { username, name, email, phone, password } = req.body;
+      const { username, name, email, phone, password } = req.body || {};
+      const cleanUsername = normalizeUsername(username);
+      const cleanEmail = email ? normalizeEmail(email) : undefined;
+      const cleanPhone = phone ? normalizePhone(phone) : undefined;
+      if (!/^[a-z0-9_.-]{3,30}$/.test(cleanUsername) || typeof password !== 'string' || password.length < 10 || password.length > 128) {
+        res.status(400).json({ success: false, message: 'Provide a valid username and a password of at least 10 characters.' });
+        return;
+      }
+      if (!cleanEmail && !cleanPhone) {
+        res.status(400).json({ success: false, message: 'Email or phone is required.' });
+        return;
+      }
+      const target = cleanEmail || cleanPhone!;
+      const challenge = await AuthChallenge.findOne({ target: target.toLowerCase(), purpose: 'REGISTRATION', verifiedAt: { $ne: null }, expiresAt: { $gt: new Date() } });
+      if (!challenge) {
+        res.status(400).json({ success: false, message: 'Verify the registration contact before creating an account.' });
+        return;
+      }
+      const passwordHash = await bcrypt.hash(password, 12);
+      const user = await User.create({
+        username: cleanUsername, name: String(name || cleanUsername).trim().slice(0, 100), email: cleanEmail,
+        phone: cleanPhone, passwordHash, role: 'USER' as UserRole, status: 'ACTIVE',
+        avatarUrl: undefined, bio: ''
+      });
+      await consumeVerifiedOtp(target, 'REGISTRATION');
+      const token = jwt.sign({ id: user._id.toString(), username: user.username, role: user.role }, config.jwtSecret, { expiresIn: '24h' });
+      setSessionCookie(res, token, 24 * 60 * 60);
+      res.status(201).json({ success: true, message: 'Account created successfully.', user: safeUser(user) });
+    } catch (error: any) {
+      if (error?.code === 11000) {
+        res.status(409).json({ success: false, field: Object.keys(error.keyPattern || {})[0], message: 'An account identifier is already in use.' });
+        return;
+      }
+      console.error('[AUTH] Registration failed:', error instanceof Error ? error.message : 'unknown error');
+      res.status(500).json({ success: false, message: 'Unable to create account.' });
+    }
+  }
 
-      if (!username || !password) {
+  public static async login(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
+    try {
+      const identifier = String(req.body?.username || '').trim();
+      const password = req.body?.password;
+      if (!identifier || typeof password !== 'string' || password.length > 128) {
         res.status(400).json({ success: false, message: 'Username and password are required.' });
         return;
       }
-
-      if (!email && !phone) {
-        res.status(400).json({ success: false, message: 'Either email address or mobile phone number is required.' });
+      const normalized = identifier.includes('@') ? normalizeEmail(identifier) : normalizeUsername(identifier);
+      const user = await User.findOne({ $or: [{ username: normalized }, { email: normalized }, { phone: normalizePhone(identifier) }] }).select('+passwordHash');
+      if (!user || !(await bcrypt.compare(password, user.passwordHash))) {
+        res.status(401).json({ success: false, message: 'Invalid username or password.' });
         return;
       }
-
-      const cleanUsername = String(username).trim().toLowerCase();
-      const cleanEmail = email ? String(email).trim().toLowerCase() : undefined;
-      const cleanPhone = phone ? String(phone).trim() : undefined;
-      const cleanPassword = String(password).trim();
-
-      if (cleanPassword.length < 6) {
-        res.status(400).json({ success: false, message: 'Password must be at least 6 characters long.' });
-        return;
-      }
-
-      // 1. Check duplicate username in database
-      const usernameExists = memoryUsers.some((u) => u.username.toLowerCase() === cleanUsername);
-      if (usernameExists) {
-        res.status(400).json({
-          success: false,
-          field: 'username',
-          message: 'This username is already taken. Please choose another username.'
-        });
-        return;
-      }
-
-      // 2. Check duplicate email in database
-      if (cleanEmail) {
-        const emailExists = memoryUsers.some((u) => u.email?.toLowerCase() === cleanEmail);
-        if (emailExists) {
-          res.status(400).json({
-            success: false,
-            field: 'email',
-            message: 'An account with this email address already exists. Please choose another.'
-          });
-          return;
-        }
-      }
-
-      // 3. Check duplicate phone in database
-      if (cleanPhone) {
-        const phoneExists = memoryUsers.some((u) => u.phone?.replace(/\s+/g, '') === cleanPhone.replace(/\s+/g, ''));
-        if (phoneExists) {
-          res.status(400).json({
-            success: false,
-            field: 'phone',
-            message: 'An account with this phone number already exists. Please choose another.'
-          });
-          return;
-        }
-      }
-
-      // 4. Verify OTP was validated
-      const verificationTarget = cleanEmail || cleanPhone;
-      if (verificationTarget) {
-        const otpRecord = otpStore.get(verificationTarget.toLowerCase());
-        if (!otpRecord || !otpRecord.verified) {
-          res.status(400).json({
-            success: false,
-            message: 'OTP verification is required before creating your account.'
-          });
-          return;
-        }
-      }
-
-      // Hash password securely
-      const passwordHash = await bcrypt.hash(cleanPassword, 10);
-
-      // 🔒 STRICT SECURITY ROLE LOCK:
-      // General public registration is strictly locked to 'USER'.
-      // Specialized roles like 'TRAVEL_AGENCY', 'ADMIN', 'SUPER_ADMIN' cannot be injected by client!
-      const LOCKED_REGISTRATION_ROLE: UserRole = 'USER';
-
-      // Create new user record
-      const newUserId = `user_${Date.now()}`;
-      const newMemoryUser: MemoryUser = {
-        id: newUserId,
-        username: cleanUsername,
-        name: name ? String(name).trim() : cleanUsername,
-        email: cleanEmail,
-        phone: cleanPhone,
-        passwordHash,
-        role: LOCKED_REGISTRATION_ROLE,
-        avatarUrl: `https://images.unsplash.com/photo-${1534528741775 + Math.floor(Math.random() * 50)}?auto=format&fit=crop&w=400&q=80`,
-        bio: 'Just joined Travel Buddy! Ready for adventures ✈️🎒',
-        createdAt: new Date().toISOString()
-      };
-
-      // 1. Store in MongoDB Database
-      let mongoSaved = false;
-      let dbId = newUserId;
-      if (isDbConnected()) {
-        try {
-          const dbDoc = await User.create({
-            username: cleanUsername,
-            name: newMemoryUser.name,
-            email: cleanEmail,
-            phone: cleanPhone,
-            passwordHash,
-            role: LOCKED_REGISTRATION_ROLE,
-            status: 'ACTIVE',
-            avatarUrl: newMemoryUser.avatarUrl,
-            bio: newMemoryUser.bio
-          });
-          mongoSaved = true;
-          dbId = dbDoc._id.toString();
-          console.log(`✅ [MONGODB travel_buddy] Stored new user in MongoDB database: @${cleanUsername} (ID: ${dbDoc._id})`);
-        } catch (dbErr: any) {
-          console.warn('⚠️ [USER REGISTRATION] MongoDB save note:', dbErr.message);
-        }
-      }
-
-      newMemoryUser.id = dbId;
-      memoryUsers.push(newMemoryUser);
-
-      // Clean up used OTP
-      if (verificationTarget) {
-        otpStore.delete(verificationTarget.toLowerCase());
-      }
-
-      // Generate JWT Session Token
-      const token = jwt.sign(
-        { id: newMemoryUser.id, username: newMemoryUser.username, role: newMemoryUser.role },
-        config.jwtSecret || 'ente_yathra_jwt_secret',
-        { expiresIn: '30d' }
-      );
-
-      res.status(201).json({
-        success: true,
-        message: 'Account created successfully and stored in the database! Welcome to Travel Buddy.',
-        storedInDatabase: true,
-        databaseTarget: mongoSaved ? 'MongoDB' : 'Persistent File DB',
-        token,
-        user: {
-          id: newMemoryUser.id,
-          username: newMemoryUser.username,
-          name: newMemoryUser.name,
-          email: newMemoryUser.email,
-          phone: newMemoryUser.phone,
-          role: newMemoryUser.role,
-          avatarUrl: newMemoryUser.avatarUrl,
-          bio: newMemoryUser.bio
-        }
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
-    }
-  }
-
-  /**
-   * Standard User Login (Username / Email / Phone + Password)
-   */
-  public static async login(req: Request, res: Response): Promise<void> {
-    try {
-      const { username, password } = req.body;
-
-      if (!username || !password) {
-        res.status(400).json({
-          success: false,
-          message: 'Username and password are required.'
-        });
-        return;
-      }
-
-      const cleanInput = String(username).trim();
-      const cleanPassword = String(password).trim();
-
-      // Find user in database
-      let user: MemoryUser | null = null;
-
-      // 1. Check MongoDB travel_buddy database
-      if (isDbConnected()) {
-        try {
-          const dbUser = await User.findOne({
-            $or: [
-              { username: cleanInput.toLowerCase() },
-              { email: cleanInput.toLowerCase() },
-              { phone: cleanInput }
-            ]
-          });
-
-          if (dbUser) {
-            user = {
-              id: dbUser._id.toString(),
-              username: dbUser.username || cleanInput,
-              name: dbUser.name || cleanInput,
-              email: dbUser.email,
-              phone: dbUser.phone,
-              passwordHash: dbUser.passwordHash,
-              role: dbUser.role as any,
-              status: ((dbUser as any).status as any) || 'ACTIVE',
-              avatarUrl: dbUser.avatarUrl || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=400&q=80',
-              bio: dbUser.bio || '',
-              createdAt: dbUser.createdAt?.toISOString() || new Date().toISOString()
-            };
-          }
-        } catch {
-          // ignore db offline
-        }
-      }
-
-      // 2. Fallback to memory
-      if (!user) {
-        user =
-          memoryUsers.find(
-            (u) =>
-              u.username.toLowerCase() === cleanInput.toLowerCase() ||
-              (u.email && u.email.toLowerCase() === cleanInput.toLowerCase()) ||
-              (u.phone && u.phone.replace(/\s+/g, '') === cleanInput.replace(/\s+/g, ''))
-          ) || null;
-      }
-
-      if (!user) {
-        res.status(401).json({
-          success: false,
-          message: 'No account found matching this username or credentials. Please check or create an account.'
-        });
-        return;
-      }
-
-      // CRITICAL BLOCK ENFORCEMENT:
-      // If user is BLOCKED by administrator, strictly reject login with 403 Forbidden
       if (user.status === 'BLOCKED') {
-        console.warn(`🛑 [EXPRESS AUTH REJECTED] User @${user.username} (${user.role}) is BLOCKED by admin.`);
-        res.status(403).json({
-          success: false,
-          blocked: true,
-          message: `Your account (@${user.username}) has been BLOCKED by the administrator. Access is restricted for this ${user.role || 'user'} account.`
-        });
+        res.status(403).json({ success: false, blocked: true, message: 'This account is blocked.' });
         return;
       }
-
-      // Check password using secure bcrypt hash
-      let isMatch = false;
-      if (user.passwordHash) {
-        isMatch = await bcrypt.compare(cleanPassword, user.passwordHash).catch(() => false);
-      }
-
-      if (!isMatch) {
-        res.status(401).json({
-          success: false,
-          message: 'Incorrect password. Please verify and try again or use Forgot Password.'
-        });
-        return;
-      }
-
-      // Generate JWT
-      const token = jwt.sign(
-        { id: user.id, username: user.username, role: user.role },
-        config.jwtSecret || 'ente_yathra_jwt_secret',
-        { expiresIn: '30d' }
-      );
-
-      res.status(200).json({
-        success: true,
-        message: 'Successfully logged in to Travel Buddy.',
-        token,
-        user: {
-          id: user.id,
-          username: user.username,
-          name: user.name,
-          email: user.email,
-          phone: user.phone,
-          role: user.role,
-          avatarUrl: user.avatarUrl,
-          bio: user.bio
-        }
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const token = jwt.sign({ id: user._id.toString(), username: user.username, role: user.role }, config.jwtSecret, { expiresIn: '24h' });
+      setSessionCookie(res, token, 24 * 60 * 60);
+      res.status(200).json({ success: true, message: 'Signed in.', user: safeUser(user) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to sign in.' });
     }
   }
 
-  /**
-   * Request Password Reset OTP
-   */
   public static async requestPasswordReset(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { identifier } = req.body;
-
+      const identifier = String(req.body?.identifier || '').trim();
       if (!identifier) {
-        res.status(400).json({ success: false, message: 'Please enter your username, email, or mobile number.' });
+        res.status(400).json({ success: false, message: 'Enter your username, email, or phone.' });
         return;
       }
-
-      const cleanIdentifier = String(identifier).trim();
-
-      // Find user
-      let foundUser: MemoryUser | null =
-        memoryUsers.find(
-          (u) =>
-            u.username.toLowerCase() === cleanIdentifier.toLowerCase() ||
-            (u.email && u.email.toLowerCase() === cleanIdentifier.toLowerCase()) ||
-            (u.phone && u.phone.replace(/\s+/g, '') === cleanIdentifier.replace(/\s+/g, ''))
-        ) || null;
-
-      if (!foundUser && isDbConnected()) {
-        try {
-          const dbUser = await User.findOne({
-            $or: [
-              { username: cleanIdentifier.toLowerCase() },
-              { email: cleanIdentifier.toLowerCase() },
-              { phone: cleanIdentifier }
-            ]
-          });
-          if (dbUser) {
-            foundUser = {
-              id: dbUser._id.toString(),
-              username: dbUser.username,
-              name: dbUser.name,
-              email: dbUser.email,
-              phone: dbUser.phone,
-              passwordHash: dbUser.passwordHash,
-              role: dbUser.role as any,
-              avatarUrl: dbUser.avatarUrl || '',
-              bio: dbUser.bio || '',
-              createdAt: new Date().toISOString()
-            };
-          }
-        } catch {
-          // ignore db offline
-        }
+      const normalized = identifier.includes('@') ? normalizeEmail(identifier) : normalizeUsername(identifier);
+      const user = await User.findOne({ $or: [{ username: normalized }, { email: normalized }, { phone: normalizePhone(identifier) }] }).select('email phone');
+      if (user) {
+        const target = user.email || user.phone;
+        if (target) await createAndDispatchOtp(target, 'PASSWORD_RESET', user.email ? 'email' : 'sms');
       }
-
-      if (!foundUser) {
-        res.status(404).json({
-          success: false,
-          message: 'No registered user found with the provided username, email, or phone number.'
-        });
-        return;
-      }
-
-      // Pick target (email preferred, or phone)
-      const target = foundUser.email || foundUser.phone;
-      if (!target) {
-        res.status(400).json({
-          success: false,
-          message: 'No email or phone attached to this account. Please contact support.'
-        });
-        return;
-      }
-
-      const isEmail = target.includes('@');
-      const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-      const expiresAt = Date.now() + 10 * 60 * 1000;
-
-      otpStore.set(target.toLowerCase(), {
-        code: otpCode,
-        target,
-        type: 'PASSWORD_RESET',
-        expiresAt,
-        verified: false
-      });
-
-      console.log(`🔑 [PASSWORD RESET OTP] Generated: ${otpCode} for ${target}`);
-
-      // Mask target for privacy
-      const maskedTarget = isEmail
-        ? target.replace(/^(.)(.*)(@.*)$/, (_, a, b, c) => `${a}***${c}`)
-        : target.replace(/(\d{3})\d+(\d{2})/, '$1****$2');
-
-      res.status(200).json({
-        success: true,
-        message: `OTP sent to ${maskedTarget}.`,
-        username: foundUser.username,
-        target,
-        maskedTarget,
-        channel: isEmail ? 'EMAIL' : 'SMS'
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      res.status(200).json({ success: true, message: 'If the account exists, a verification code will be sent.' });
+    } catch {
+      res.status(503).json({ success: false, message: 'Password reset delivery is unavailable.' });
     }
   }
 
-  /**
-   * Reset Password (after OTP confirmation)
-   */
   public static async resetPassword(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { target, otp, newPassword } = req.body;
-
-      if (!target || !otp || !newPassword) {
-        res.status(400).json({
-          success: false,
-          message: 'Target identifier, OTP code, and new password are required.'
-        });
+      const identifier = String(req.body?.target || '').trim();
+      const code = String(req.body?.otp || '').trim();
+      const password = req.body?.newPassword;
+      if (!identifier || !/^\d{6}$/.test(code) || typeof password !== 'string' || password.length < 10 || password.length > 128) {
+        res.status(400).json({ success: false, message: 'Provide a valid code and a password of at least 10 characters.' });
         return;
       }
-
-      const cleanTarget = String(target).trim().toLowerCase();
-      const cleanOtp = String(otp).trim();
-      const cleanPassword = String(newPassword).trim();
-
-      if (cleanPassword.length < 6) {
-        res.status(400).json({ success: false, message: 'New password must be at least 6 characters long.' });
+      const normalized = identifier.includes('@') ? normalizeEmail(identifier) : normalizeUsername(identifier);
+      const user = await User.findOne({ $or: [{ username: normalized }, { email: normalized }, { phone: normalizePhone(identifier) }] });
+      const target = user?.email || user?.phone;
+      if (!user || !target) {
+        res.status(400).json({ success: false, message: 'Unable to reset this account.' });
         return;
       }
-
-      const record = otpStore.get(cleanTarget);
-      if (!record) {
-        res.status(400).json({ success: false, message: 'Invalid or expired OTP session. Please request again.' });
+      const valid = await verifyOtp(target, 'PASSWORD_RESET', code);
+      if (!valid || !(await consumeVerifiedOtp(target, 'PASSWORD_RESET'))) {
+        res.status(400).json({ success: false, message: 'Invalid or expired verification code.' });
         return;
       }
-
-      if (record.code !== cleanOtp) {
-        res.status(400).json({ success: false, message: 'Invalid OTP code. Please enter the correct code.' });
-        return;
-      }
-
-      // Hash new password
-      const newHash = await bcrypt.hash(cleanPassword, 10);
-
-      // Update in memory
-      const memUser = memoryUsers.find(
-        (u) =>
-          (u.email && u.email.toLowerCase() === cleanTarget) ||
-          (u.phone && u.phone.replace(/\s+/g, '') === cleanTarget.replace(/\s+/g, '')) ||
-          u.username.toLowerCase() === cleanTarget
-      );
-      if (memUser) {
-        memUser.passwordHash = newHash;
-      }
-
-      // Update in MongoDB if connected
-      if (isDbConnected()) {
-        try {
-          await User.updateOne(
-            {
-              $or: [
-                { email: cleanTarget },
-                { phone: cleanTarget },
-                { username: cleanTarget }
-              ]
-            },
-            { $set: { passwordHash: newHash } }
-          );
-          console.log(`✅ [MONGODB DATABASE] Password updated in MongoDB for ${cleanTarget}`);
-        } catch (dbErr: any) {
-          console.warn('⚠️ [RESET PASSWORD] DB update notice:', dbErr.message);
-        }
-      }
-
-      // Invalidate OTP
-      otpStore.delete(cleanTarget);
-
-      res.status(200).json({
-        success: true,
-        message: 'Password reset successfully! You can now log in with your new password.',
-        username: memUser?.username
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      user.passwordHash = await bcrypt.hash(password, 12);
+      await user.save();
+      res.status(200).json({ success: true, message: 'Password reset successfully.', username: user.username });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to reset password.' });
     }
   }
 
-  /**
-   * Get current authenticated user profile
-   */
   public static async getProfile(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        res.status(401).json({ success: false, message: 'Unauthorized. Token required.' });
+      const authenticatedId = (req as any).user?.id;
+      if (!authenticatedId || !mongoose.isValidObjectId(authenticatedId)) {
+        res.status(401).json({ success: false, message: 'Authenticated account required.' });
         return;
       }
-
-      const token = authHeader.split(' ')[1];
-      const decoded: any = jwt.verify(token, config.jwtSecret || 'ente_yathra_jwt_secret');
-
-      const memUser = memoryUsers.find((u) => u.username === decoded.username || u.id === decoded.id);
-
-      if (memUser) {
-        res.status(200).json({
-          success: true,
-          user: {
-            id: memUser.id,
-            username: memUser.username,
-            name: memUser.name,
-            email: memUser.email,
-            phone: memUser.phone,
-            role: memUser.role,
-            avatarUrl: memUser.avatarUrl,
-            bio: memUser.bio
-          }
-        });
+      const user = await User.findById(authenticatedId).select('-passwordHash -travelerPassport -agencyDetails');
+      if (!user || user.status === 'BLOCKED') {
+        clearSessionCookie(res);
+        res.status(404).json({ success: false, message: 'User not found.' });
         return;
       }
-
-      res.status(404).json({ success: false, message: 'User not found.' });
-    } catch (err: any) {
-      res.status(401).json({ success: false, message: 'Invalid or expired token.' });
+      res.status(200).json({ success: true, user: safeUser(user) });
+    } catch {
+      res.status(401).json({ success: false, message: 'Invalid or expired session.' });
     }
   }
 
-  /**
-   * Get all registered users from database
-   */
+  public static async logout(req: Request, res: Response): Promise<void> {
+    clearSessionCookie(res);
+    res.status(200).json({ success: true, message: 'Signed out.' });
+  }
+
   public static async getAllUsers(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      if (isDbConnected()) {
-        const dbUsers = await User.find({}).sort({ createdAt: -1 });
-        const safe = dbUsers.map((u: any) => ({
-          id: u._id.toString(),
-          username: u.username,
-          name: u.name,
-          email: u.email || '',
-          phone: u.phone || '',
-          password: '••••••••',
-          role: u.role || 'USER',
-          status: u.status || 'ACTIVE',
-          avatarUrl: u.avatarUrl,
-          bio: u.bio || '',
-          createdAt: u.createdAt ? u.createdAt.toISOString() : new Date().toISOString()
-        }));
-        res.status(200).json({ success: true, count: safe.length, users: safe });
-        return;
-      }
-
-      const safe = memoryUsers.map((u) => ({
-        id: u.id,
-        username: u.username,
-        name: u.name,
-        email: u.email || '',
-        phone: u.phone || '',
-        password: '••••••••',
-        role: u.role || 'USER',
-        status: u.status || 'ACTIVE',
-        avatarUrl: u.avatarUrl,
-        createdAt: u.createdAt
-      }));
-      res.status(200).json({ success: true, count: safe.length, users: safe });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const users = await User.find({}).select('username name email phone role status avatarUrl bio createdAt').sort({ createdAt: -1 }).lean();
+      res.status(200).json({ success: true, count: users.length, users: users.map((user: any) => ({
+        id: user._id.toString(), username: user.username, name: user.name, email: user.email || '', phone: user.phone || '',
+        role: user.role || 'USER', status: user.status || 'ACTIVE', avatarUrl: user.avatarUrl, bio: user.bio || '', createdAt: user.createdAt
+      })) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load users.' });
     }
   }
 
-  /**
-   * Delete user from database
-   */
   public static async deleteUser(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { userId, id, username } = req.body;
-      const targetId = userId || id;
-      const adminActor = (req as any).user?.username || 'SuperAdmin';
-
-      console.log(`🛡️ [ADMIN AUDIT] User deletion triggered for [${targetId || username}] by Admin @${adminActor} from IP ${req.ip} at ${new Date().toISOString()}`);
-
-      if (isDbConnected()) {
-        const query: any[] = [];
-        if (targetId) query.push({ _id: targetId });
-        if (username) query.push({ username: String(username).toLowerCase() });
-        const result = await User.deleteOne({ $or: query });
-        if (result.deletedCount > 0) {
-          res.status(200).json({ success: true, message: 'User permanently deleted from MongoDB database.' });
-          return;
-        }
-      }
-
-      const initialCount = memoryUsers.length;
-
-      memoryUsers = memoryUsers.filter((u) => {
-        if (targetId && u.id === targetId) return false;
-        if (username && u.username.toLowerCase() === String(username).toLowerCase()) return false;
-        return true;
-      });
-
-      if (memoryUsers.length === initialCount) {
-        res.status(404).json({ success: false, message: 'User not found in database.' });
+      const targetId = req.body?.userId || req.body?.id;
+      const username = normalizeUsername(req.body?.username);
+      const query: any[] = [];
+      if (targetId && mongoose.isValidObjectId(targetId)) query.push({ _id: targetId });
+      if (username) query.push({ username });
+      if (!query.length) {
+        res.status(400).json({ success: false, message: 'A valid user ID or username is required.' });
         return;
       }
-
-      res.status(200).json({ success: true, message: 'User permanently deleted from database.' });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const result = await User.deleteOne({ $or: query, role: { $ne: 'SUPER_ADMIN' } });
+      res.status(result.deletedCount ? 200 : 404).json({ success: result.deletedCount > 0, message: result.deletedCount ? 'User deleted.' : 'User not found or protected.' });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to delete user.' });
     }
   }
 
-  /**
-   * Toggle block/active status of user
-   */
   public static async toggleBlockUser(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
     try {
-      const { userId, id, username } = req.body;
-      const targetId = userId || id;
-      const adminActor = (req as any).user?.username || 'SuperAdmin';
-
-      console.log(`🛡️ [ADMIN AUDIT] User status toggle triggered for [${targetId || username}] by Admin @${adminActor} from IP ${req.ip} at ${new Date().toISOString()}`);
-
-      if (isDbConnected()) {
-        const query: any[] = [];
-        if (targetId) query.push({ _id: targetId });
-        if (username) query.push({ username: String(username).toLowerCase() });
-        const dbUser = await User.findOne({ $or: query });
-        if (dbUser) {
-          dbUser.status = dbUser.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-          await dbUser.save();
-          res.status(200).json({
-            success: true,
-            status: dbUser.status,
-            message: `User @${dbUser.username} is now ${dbUser.status}.`
-          });
-          return;
-        }
-      }
-
-      const user = memoryUsers.find((u) => {
-        if (targetId && u.id === targetId) return true;
-        if (username && u.username.toLowerCase() === String(username).toLowerCase()) return true;
-        return false;
-      });
-
-      if (!user) {
-        res.status(404).json({ success: false, message: 'User not found in database.' });
+      const targetId = req.body?.userId || req.body?.id;
+      const username = normalizeUsername(req.body?.username);
+      const query: any[] = [];
+      if (targetId && mongoose.isValidObjectId(targetId)) query.push({ _id: targetId });
+      if (username) query.push({ username });
+      if (!query.length) {
+        res.status(400).json({ success: false, message: 'A valid user ID or username is required.' });
         return;
       }
-
+      const user = await User.findOne({ $or: query, role: { $ne: 'SUPER_ADMIN' } });
+      if (!user) {
+        res.status(404).json({ success: false, message: 'User not found or protected.' });
+        return;
+      }
       user.status = user.status === 'BLOCKED' ? 'ACTIVE' : 'BLOCKED';
-
-      res.status(200).json({
-        success: true,
-        status: user.status,
-        message: `User @${user.username} is now ${user.status}.`
-      });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      await user.save();
+      res.status(200).json({ success: true, status: user.status, message: 'User status updated.' });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to update user status.' });
     }
   }
 }

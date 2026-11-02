@@ -7,12 +7,10 @@ export interface UserSession {
   role: 'TRAVELER' | 'HOTEL_HOST' | 'SUPER_ADMIN' | 'USER' | 'ADMIN' | string;
   avatarUrl?: string;
   bio?: string;
-  token: string;
   authenticatedAt: string;
 }
 
 const STORAGE_KEY = 'travel_buddy_traveler_session';
-const TOKEN_KEY = 'travel_buddy_traveler_token';
 const AUTH_EVENT = 'travel_buddy_traveler_auth_changed';
 
 export function getUserSession(): UserSession | null {
@@ -21,7 +19,7 @@ export function getUserSession(): UserSession | null {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed && parsed.token && parsed.username) {
+    if (parsed && parsed.username) {
       return parsed;
     }
     return null;
@@ -33,14 +31,15 @@ export function getUserSession(): UserSession | null {
 export function setUserSession(session: UserSession): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
-  localStorage.setItem(TOKEN_KEY, session.token);
+  localStorage.removeItem('travel_buddy_traveler_token');
   window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: session }));
 }
 
 export function clearUserSession(): void {
   if (typeof window === 'undefined') return;
+  void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {});
   localStorage.removeItem(STORAGE_KEY);
-  localStorage.removeItem(TOKEN_KEY);
+  localStorage.removeItem('travel_buddy_traveler_token');
   window.dispatchEvent(new CustomEvent(AUTH_EVENT, { detail: null }));
 }
 

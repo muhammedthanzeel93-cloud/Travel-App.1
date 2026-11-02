@@ -1,366 +1,272 @@
 import { Request, Response } from 'express';
 import mongoose from 'mongoose';
-import jwt from 'jsonwebtoken';
-import { config } from '../../core/config/index.js';
-import { Post, Reel, Story, DirectMessage } from './social.model.js';
+import { AuthenticatedRequest } from '../../middlewares/auth.middleware.js';
+import { User } from '../auth/user.model.js';
+import { DirectMessage, Post, Reel, Story } from './social.model.js';
 
-const MOCK_POSTS = [
-  {
-    _id: 'post_1',
-    user: {
-      name: 'Aisha Al-Falasi',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-      handle: '@aisha_dubai'
-    },
-    images: [
-      'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1580674684081-7617fbf3d745?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=1200&q=80'
-    ],
-    caption: 'Golden hour at the top of Burj Khalifa! 🌅 Words cannot describe the sunset casting its amber glow over the Arabian Gulf. Swipe to see the night views! ✨ #DubaiDiary #BurjKhalifa #VisitDubai',
-    locationName: 'Burj Khalifa, Dubai',
-    likesCount: 1420,
-    isLiked: true,
-    commentsCount: 38,
-    comments: [
-      {
-        userName: 'Rahul Nair',
-        userAvatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=120&q=80',
-        text: 'Incredible shots! Did you take the sunset slot at 17:30?',
-        createdAt: '2 hours ago'
-      },
-      {
-        userName: 'Fatima Zahra',
-        userAvatar: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=120&q=80',
-        text: 'Pure magic ✨ Adding this to my 10-day Dubai roadmap!',
-        createdAt: '1 hour ago'
-      }
-    ],
-    createdAt: new Date()
-  },
-  {
-    _id: 'post_2',
-    user: {
-      name: 'Kozhikode Wanderer',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-      handle: '@clt_wanderlust'
-    },
-    images: [
-      'https://images.unsplash.com/photo-1451337516015-6b6e9a44a8a3?auto=format&fit=crop&w=1200&q=80',
-      'https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=1200&q=80'
-    ],
-    caption: 'Dune bashing at Lahbab Desert 🏜️ followed by an unforgettable Arabian dinner under millions of stars. The hospitality was top-notch! ⛺🐪',
-    locationName: 'Lahbab Red Dunes, Dubai',
-    likesCount: 890,
-    isLiked: false,
-    commentsCount: 19,
-    comments: [
-      {
-        userName: 'Sara Khan',
-        userAvatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=120&q=80',
-        text: 'The red sand is so photogenic! Did you try sandboarding?',
-        createdAt: '3 hours ago'
-      }
-    ],
-    createdAt: new Date()
-  }
-];
+const mediaUrlIsValid = (value: unknown): value is string => {
+  if (typeof value !== 'string' || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:';
+  } catch { return false; }
+};
 
-const MOCK_REELS = [
-  {
-    _id: 'reel_1',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-dubai-city-buildings-and-skyscrapers-at-dusk-42171-large.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1512453979798-5ea266f8880c?auto=format&fit=crop&w=600&q=80',
-    caption: 'Dusk over Downtown Dubai skyline 🌆 Fly Emirates from Calicut to DXB! #DubaiReels #Wanderlust',
-    user: {
-      name: 'Aisha Travels',
-      handle: '@aisha_dubai',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-    },
-    audioTrack: 'Original Sound - Dubai Sunset Chill Beats 🎵',
-    location: 'Dubai Marina & Downtown',
-    likesCount: 8430,
-    commentsCount: 154,
-    sharesCount: 620
-  },
-  {
-    _id: 'reel_2',
-    videoUrl: 'https://assets.mixkit.co/videos/preview/mixkit-speed-boat-cruising-through-the-waters-of-dubai-42172-large.mp4',
-    thumbnailUrl: 'https://images.unsplash.com/photo-1518684079-3c830dcef090?auto=format&fit=crop&w=600&q=80',
-    caption: 'Cruising past the Palm Jumeirah on a private yacht 🛥️🌊 The water is crystal clear!',
-    user: {
-      name: 'Rahul Nair',
-      handle: '@rahul_adventures',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=120&q=80'
-    },
-    audioTrack: 'Arabian Deep House Mix 🎵',
-    location: 'Palm Jumeirah, Dubai',
-    likesCount: 12400,
-    commentsCount: 310,
-    sharesCount: 940
-  }
-];
-
-const MOCK_STORIES = [
-  {
-    _id: 'story_1',
-    user: {
-      name: 'Aisha Al-Falasi',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80',
-      hasUnseenStory: true
-    },
-    mediaUrl: 'https://images.unsplash.com/photo-1584551246679-0daf3d275d0f?auto=format&fit=crop&w=800&q=80',
-    poll: {
-      question: 'Skydiving over Palm Jumeirah or Desert Safari?',
-      optionA: { text: '🪂 Skydive Palm', votes: 68 },
-      optionB: { text: '🏜️ Desert Dune', votes: 32 }
-    },
-    expiresInHours: 18
-  },
-  {
-    _id: 'story_2',
-    user: {
-      name: 'Kozhikode Wanderer',
-      avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=120&q=80',
-      hasUnseenStory: true
-    },
-    mediaUrl: 'https://images.unsplash.com/photo-1658826723326-1b777a8342ca?auto=format&fit=crop&w=800&q=80',
-    qaPrompt: 'Ask me anything about the Dubai 10-day tourist visa rules! 🇦🇪',
-    expiresInHours: 11
-  }
-];
-
-const MOCK_DMS = [
-  {
-    _id: 'dm_1',
-    sender: {
-      name: 'Aisha Al-Falasi',
-      avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
-    },
-    messageType: 'AUDIO_VOICE_NOTE',
-    audioVoiceNote: {
-      durationSeconds: 14,
-      waveFormData: [12, 28, 45, 80, 95, 60, 42, 70, 88, 30, 15, 65, 90, 40],
-      audioUrl: 'https://actions.google.com/sounds/v1/ambiences/outdoor_ambience.ogg'
-    },
-    createdAt: '10:45 AM'
-  },
-  {
-    _id: 'dm_2',
-    sender: {
-      name: 'Rahul Nair',
-      avatar: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?auto=format&fit=crop&w=120&q=80'
-    },
-    messageType: 'STAY_SHARE',
-    stayShare: {
-      stayType: 'RESORT',
-      pnr: 'BK8902',
-      summary: 'Rainforest Eco Luxury Villa • Confirmed Stay'
-    },
-    createdAt: '11:15 AM'
-  }
-];
+const getActor = (req: AuthenticatedRequest) => req.user;
 
 export class SocialController {
-  /**
-   * Fetch live community social travel posts
-   */
-  public static async getFeed(req: Request, res: Response): Promise<void> {
+  public static async getFeed(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      if (mongoose.connection.readyState === 1) {
-        try {
-          const posts = await Post.find({})
-            .populate('userId', 'name username avatarUrl bio isVerified')
-            .sort({ createdAt: -1 });
-
-          if (posts && posts.length > 0) {
-            const formatted = posts.map((p: any) => ({
-              _id: p._id.toString(),
-              user: {
-                name: p.userId?.name || p.userId?.username || 'Community Explorer',
-                avatar: p.userId?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775?auto=format&fit=crop&w=200&q=80',
-                handle: `@${p.userId?.username || 'traveler'}`
-              },
-              images: p.images || [],
-              caption: p.caption || '',
-              locationName: p.locationName || 'Destination',
-              likesCount: p.likesCount || 0,
-              isLiked: false,
-              commentsCount: p.commentsCount || (p.comments ? p.comments.length : 0),
-              comments: (p.comments || []).map((c: any) => ({
-                userName: c.userName || 'Community Explorer',
-                userAvatar: c.userAvatar || 'https://images.unsplash.com/photo-1534528741775?auto=format&fit=crop&w=120&q=80',
-                text: c.text,
-                createdAt: c.createdAt ? new Date(c.createdAt).toLocaleDateString() : 'Just now'
-              })),
-              createdAt: p.createdAt || new Date()
-            }));
-
-            res.status(200).json({ success: true, count: formatted.length, posts: formatted });
-            return;
-          }
-        } catch (e: any) {
-          console.warn('⚠️ [SOCIAL FEED] Mongo query fallback:', e.message);
-        }
-      }
-
-      res.status(200).json({ success: true, count: MOCK_POSTS.length, posts: MOCK_POSTS });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const posts = await Post.find({}).populate('userId', 'name username avatarUrl isVerified').sort({ createdAt: -1 }).limit(100);
+      res.status(200).json({ success: true, count: posts.length, posts: posts.map((post: any) => ({
+        _id: post._id.toString(),
+        user: {
+          name: post.userId?.name || post.userId?.username || 'Community Explorer',
+          avatar: post.userId?.avatarUrl || '', handle: '@' + (post.userId?.username || 'traveler')
+        },
+        images: post.images || [], caption: post.caption || '', locationName: post.locationName || '',
+        likesCount: post.likesCount || 0, isLiked: Boolean(req.user && post.likes.some((id: any) => id.toString() === req.user?.id)),
+        commentsCount: post.commentsCount || 0,
+        comments: (post.comments || []).map((comment: any) => ({
+          userName: comment.userName || 'Community Explorer', userAvatar: comment.userAvatar || '',
+          text: comment.text, createdAt: comment.createdAt
+        })), createdAt: post.createdAt
+      })) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load the travel feed.' });
     }
   }
 
-  public static async toggleLikePost(req: Request, res: Response): Promise<void> {
+  public static async createPost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const { postId } = req.params;
-      const { isLiked } = req.body;
-
-      res.status(200).json({
-        success: true,
-        postId,
-        isLiked: !isLiked,
-        newLikesCount: isLiked ? 1419 : 1421,
-        message: isLiked ? 'Post unliked' : 'Post liked with double-tap heart ❤️'
+      const user = getActor(req);
+      const { images, caption, locationName = '', city = '' } = req.body || {};
+      if (!user || !Array.isArray(images) || images.length < 1 || images.length > 10 || !images.every(mediaUrlIsValid) || typeof caption !== 'string' || !caption.trim() || caption.length > 5000) {
+        res.status(400).json({ success: false, message: 'Provide one to ten valid image URLs and a caption up to 5000 characters.' });
+        return;
+      }
+      const post = await Post.create({
+        userId: user.id, images, caption: caption.trim(),
+        locationName: typeof locationName === 'string' ? locationName.trim().slice(0, 160) : '',
+        city: typeof city === 'string' ? city.trim().slice(0, 120) : ''
       });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      res.status(201).json({ success: true, postId: post._id.toString() });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to create post.' });
     }
   }
 
-  public static async getReels(req: Request, res: Response): Promise<void> {
+  public static async toggleLikePost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      if (mongoose.connection.readyState === 1) {
-        try {
-          const reels = await Reel.find({})
-            .populate('userId', 'name username avatarUrl')
-            .sort({ createdAt: -1 });
-
-          if (reels && reels.length > 0) {
-            const formatted = reels.map((r: any) => ({
-              _id: r._id.toString(),
-              videoUrl: r.videoUrl,
-              thumbnailUrl: r.thumbnailUrl,
-              caption: r.caption,
-              user: {
-                name: r.userId?.name || r.userId?.username || 'Explorer',
-                handle: `@${r.userId?.username || 'traveler'}`,
-                avatar: r.userId?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775?auto=format&fit=crop&w=120&q=80'
-              },
-              audioTrack: r.audioTrack || 'Original Travel Audio 🎵',
-              location: r.locationName || 'Scenic View',
-              likesCount: r.likesCount || 0,
-              commentsCount: r.commentsCount || 0,
-              sharesCount: 120
-            }));
-
-            res.status(200).json({ success: true, count: formatted.length, reels: formatted });
-            return;
-          }
-        } catch (e: any) {
-          console.warn('⚠️ [REELS] Mongo query fallback:', e.message);
-        }
+      const userId = getActor(req)?.id;
+      const postId = req.params.postId;
+      if (!userId || !mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'Valid post and account are required.' });
+        return;
       }
-
-      res.status(200).json({ success: true, count: MOCK_REELS.length, reels: MOCK_REELS });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const unlike = await Post.updateOne({ _id: postId, likes: userId }, { $pull: { likes: userId }, $inc: { likesCount: -1 } });
+      if (!unlike.matchedCount) {
+        await Post.updateOne({ _id: postId, likes: { $ne: userId } }, { $addToSet: { likes: userId }, $inc: { likesCount: 1 } });
+      }
+      const post = await Post.findById(postId).select('likes likesCount');
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      const isLiked = post.likes.some((id) => id.toString() === userId);
+      res.status(200).json({ success: true, postId, isLiked, newLikesCount: post.likesCount });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to update like.' });
     }
   }
 
-  public static async getStories(req: Request, res: Response): Promise<void> {
+  public static async addComment(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      if (mongoose.connection.readyState === 1) {
-        try {
-          const stories = await Story.find({})
-            .populate('userId', 'name username avatarUrl')
-            .sort({ createdAt: -1 });
-
-          if (stories && stories.length > 0) {
-            const formatted = stories.map((s: any) => ({
-              _id: s._id.toString(),
-              user: {
-                name: s.userId?.name || s.userId?.username || 'Explorer',
-                avatar: s.userId?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775?auto=format&fit=crop&w=120&q=80',
-                hasUnseenStory: true
-              },
-              mediaUrl: s.mediaUrl,
-              poll: s.pollSticker
-                ? {
-                    question: s.pollSticker.question,
-                    optionA: s.pollSticker.optionA,
-                    optionB: s.pollSticker.optionB
-                  }
-                : undefined,
-              qaPrompt: s.qaSticker?.prompt,
-              expiresInHours: 24
-            }));
-
-            res.status(200).json({ success: true, stories: formatted });
-            return;
-          }
-        } catch (e: any) {
-          console.warn('⚠️ [STORIES] Mongo query fallback:', e.message);
-        }
+      const userId = getActor(req)?.id;
+      const postId = req.params.postId;
+      const text = req.body?.text;
+      if (!userId || !mongoose.isValidObjectId(postId) || typeof text !== 'string' || !text.trim() || text.length > 2000) {
+        res.status(400).json({ success: false, message: 'A valid post and comment up to 2000 characters are required.' });
+        return;
       }
-
-      res.status(200).json({ success: true, stories: MOCK_STORIES });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+      const user = await User.findById(userId).select('name username avatarUrl');
+      if (!user) {
+        res.status(401).json({ success: false, message: 'Account is unavailable.' });
+        return;
+      }
+      const post = await Post.findByIdAndUpdate(postId, {
+        $push: { comments: { userId, userName: user.name || user.username, userAvatar: user.avatarUrl || '', text: text.trim() } },
+        $inc: { commentsCount: 1 }
+      }, { new: true }).select('commentsCount');
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      res.status(201).json({ success: true, commentsCount: post.commentsCount });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to add comment.' });
     }
   }
 
-  public static async getDirectMessages(req: Request, res: Response): Promise<void> {
+  public static async toggleSavePost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      // 🔒 Extract current user from Bearer Token to prevent IDOR leaks
-      let currentUserId: string | null = null;
-      const authHeader = req.headers.authorization;
-      if (authHeader && authHeader.startsWith('Bearer ')) {
-        try {
-          const decoded: any = jwt.verify(authHeader.split(' ')[1], config.jwtSecret);
-          currentUserId = decoded?.id || null;
-        } catch {
-          // Token invalid
-        }
+      const userId = getActor(req)?.id;
+      const postId = req.params.postId;
+      if (!userId || !mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'Valid post and account are required.' });
+        return;
       }
-
-      if (mongoose.connection.readyState === 1) {
-        try {
-          // Scope query to messages where the authenticated user is either sender or recipient
-          const query = currentUserId
-            ? { $or: [{ senderId: currentUserId }, { recipientId: currentUserId }] }
-            : { _id: { $exists: false } }; // Return empty set if unauthenticated
-
-          const messages = await DirectMessage.find(query)
-            .populate('senderId', 'name username avatarUrl')
-            .sort({ createdAt: -1 });
-
-          if (messages && messages.length > 0) {
-            const formatted = messages.map((m: any) => ({
-              _id: m._id.toString(),
-              sender: {
-                name: m.senderId?.name || m.senderId?.username || 'Traveler',
-                avatar: m.senderId?.avatarUrl || 'https://images.unsplash.com/photo-1534528741775?auto=format&fit=crop&w=120&q=80'
-              },
-              messageType: m.messageType,
-              audioVoiceNote: m.audioVoiceNote,
-              stayShare: m.stayShare,
-              createdAt: m.createdAt
-                ? new Date(m.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                : 'Now'
-            }));
-
-            res.status(200).json({ success: true, messages: formatted });
-            return;
-          }
-        } catch (e: any) {
-          console.warn('⚠️ [DMS] Mongo query fallback:', e.message);
-        }
+      const removed = await Post.updateOne({ _id: postId, savedBy: userId }, { $pull: { savedBy: userId } });
+      if (!removed.matchedCount) await Post.updateOne({ _id: postId }, { $addToSet: { savedBy: userId } });
+      const post = await Post.findById(postId).select('savedBy');
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
       }
+      res.status(200).json({ success: true, isSaved: post.savedBy.some((id) => id.toString() === userId) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to update saved post.' });
+    }
+  }
 
-      // If user is authenticated, return scoped mock DMs, otherwise empty
-      res.status(200).json({ success: true, messages: currentUserId ? MOCK_DMS : [] });
-    } catch (err: any) {
-      res.status(500).json({ success: false, message: err.message });
+  public static async getReels(_req: Request, res: Response): Promise<void> {
+    try {
+      const reels = await Reel.find({}).populate('userId', 'name username avatarUrl').sort({ createdAt: -1 }).limit(100);
+      res.status(200).json({ success: true, count: reels.length, reels: reels.map((reel: any) => ({
+        _id: reel._id.toString(), videoUrl: reel.videoUrl, thumbnailUrl: reel.thumbnailUrl,
+        caption: reel.caption, user: { name: reel.userId?.name || reel.userId?.username || 'Explorer', handle: '@' + (reel.userId?.username || 'traveler'), avatar: reel.userId?.avatarUrl || '' },
+        audioTrack: reel.audioTrackName, location: reel.locationName, likesCount: reel.likesCount,
+        commentsCount: reel.commentsCount, sharesCount: reel.sharesCount
+      })) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load reels.' });
+    }
+  }
+
+  public static async createReel(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      const { videoUrl, thumbnailUrl, caption, audioTrackName = '', locationName = '' } = req.body || {};
+      if (!userId || !mediaUrlIsValid(videoUrl) || !mediaUrlIsValid(thumbnailUrl) || typeof caption !== 'string' || !caption.trim() || caption.length > 5000) {
+        res.status(400).json({ success: false, message: 'Valid media URLs and a caption up to 5000 characters are required.' });
+        return;
+      }
+      const reel = await Reel.create({ userId, videoUrl, thumbnailUrl, caption: caption.trim(), audioTrackName: String(audioTrackName).slice(0, 160), locationName: String(locationName).slice(0, 160) });
+      res.status(201).json({ success: true, reelId: reel._id.toString() });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to create reel.' });
+    }
+  }
+
+  public static async getStories(_req: Request, res: Response): Promise<void> {
+    try {
+      const stories = await Story.find({ expiresAt: { $gt: new Date() } }).populate('userId', 'name username avatarUrl').sort({ createdAt: -1 }).limit(100);
+      res.status(200).json({ success: true, stories: stories.map((story: any) => ({
+        _id: story._id.toString(), user: { name: story.userId?.name || story.userId?.username || 'Explorer', avatar: story.userId?.avatarUrl || '', hasUnseenStory: true },
+        mediaUrl: story.mediaUrl, poll: story.pollSticker, qaPrompt: story.qaSticker?.prompt, expiresAt: story.expiresAt
+      })) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load stories.' });
+    }
+  }
+
+  public static async createStory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      const { mediaUrl, mediaType = 'IMAGE', caption, locationName } = req.body || {};
+      if (!userId || !mediaUrlIsValid(mediaUrl) || !['IMAGE', 'VIDEO'].includes(mediaType) || (caption && (typeof caption !== 'string' || caption.length > 2000))) {
+        res.status(400).json({ success: false, message: 'Valid story media and optional caption are required.' });
+        return;
+      }
+      const story = await Story.create({ userId, mediaUrl, mediaType, caption, locationName: typeof locationName === 'string' ? locationName.slice(0, 160) : undefined });
+      res.status(201).json({ success: true, storyId: story._id.toString(), expiresAt: story.expiresAt });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to create story.' });
+    }
+  }
+
+  public static async voteStory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      const storyId = req.params.storyId;
+      const choice = req.body?.choice;
+      if (!userId || !mongoose.isValidObjectId(storyId) || !['A', 'B'].includes(choice)) {
+        res.status(400).json({ success: false, message: 'A valid story and poll choice are required.' });
+        return;
+      }
+      const path = choice === 'A' ? 'pollSticker.optionA.votes' : 'pollSticker.optionB.votes';
+      const result = await Story.updateOne({ _id: storyId, expiresAt: { $gt: new Date() }, 'pollSticker.question': { $exists: true }, 'pollSticker.votedUserIds.userId': { $ne: userId } }, {
+        $inc: { [path]: 1 }, $push: { 'pollSticker.votedUserIds': { userId, choice } }
+      });
+      if (!result.modifiedCount) {
+        res.status(409).json({ success: false, message: 'Poll is unavailable or you have already voted.' });
+        return;
+      }
+      res.status(200).json({ success: true });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to record poll vote.' });
+    }
+  }
+
+  public static async answerStory(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      const storyId = req.params.storyId;
+      const responseText = req.body?.response;
+      if (!userId || !mongoose.isValidObjectId(storyId) || typeof responseText !== 'string' || !responseText.trim() || responseText.length > 2000) {
+        res.status(400).json({ success: false, message: 'A valid response up to 2000 characters is required.' });
+        return;
+      }
+      const story = await Story.findOneAndUpdate({ _id: storyId, expiresAt: { $gt: new Date() }, 'qaSticker.prompt': { $exists: true } }, {
+        $push: { 'qaSticker.responses': { userId, responseText: responseText.trim() } }
+      }, { new: true }).select('_id');
+      if (!story) {
+        res.status(404).json({ success: false, message: 'Question sticker not found.' });
+        return;
+      }
+      res.status(201).json({ success: true });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to submit story response.' });
+    }
+  }
+
+  public static async getDirectMessages(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      if (!userId) {
+        res.status(401).json({ success: false, message: 'Sign in required.' });
+        return;
+      }
+      const messages = await DirectMessage.find({ $or: [{ senderId: userId }, { recipientId: userId }] })
+        .populate('senderId', 'name username avatarUrl').sort({ createdAt: -1 }).limit(100);
+      res.status(200).json({ success: true, messages: messages.map((message: any) => ({
+        _id: message._id.toString(), senderId: message.senderId?._id?.toString(),
+        sender: { name: message.senderId?.name || message.senderId?.username || 'Traveler', avatar: message.senderId?.avatarUrl || '' },
+        messageType: message.messageType, text: message.text, audioVoiceNote: message.audioVoiceNote,
+        stayShare: message.stayShare, isRead: message.isRead, createdAt: message.createdAt
+      })) });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load messages.' });
+    }
+  }
+
+  public static async sendDirectMessage(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const senderId = getActor(req)?.id;
+      const recipientId = String(req.body?.recipientId || '');
+      const text = req.body?.text;
+      if (!senderId || !mongoose.isValidObjectId(recipientId) || recipientId === senderId || typeof text !== 'string' || !text.trim() || text.length > 5000) {
+        res.status(400).json({ success: false, message: 'A recipient and message up to 5000 characters are required.' });
+        return;
+      }
+      if (!(await User.exists({ _id: recipientId, status: 'ACTIVE' }))) {
+        res.status(404).json({ success: false, message: 'Recipient not found.' });
+        return;
+      }
+      const message = await DirectMessage.create({ senderId, recipientId, messageType: 'TEXT', text: text.trim() });
+      res.status(201).json({ success: true, messageId: message._id.toString() });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to send message.' });
     }
   }
 }

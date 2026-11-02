@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
   ShieldAlert,
@@ -15,45 +15,42 @@ import {
   X,
   Camera
 } from 'lucide-react';
-import { getAdminSession, setAdminSession, performAdminLogout } from '@/features/admin/auth';
+import { setAdminSession, performAdminLogout } from '@/features/admin/auth';
 
 export default function OperationsLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   const [adminUser, setAdminUser] = useState<any>(null);
+  const [isAuthChecked, setIsAuthChecked] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   useEffect(() => {
-    const checkAuth = () => {
-      const session = getAdminSession();
-      if (session) {
-        setAdminUser(session);
-      } else {
-        // Auto-provision master session for local dev so operations console never hangs
-        const masterSession = {
-          username: 'admin',
-          email: 'admin@travelbuddy.com',
-          name: 'Travel Buddy Super Admin',
-          role: 'SUPER_ADMIN' as const,
-          token: 'jwt_offline_vault_travel_buddy_2026',
-          authenticatedAt: new Date().toISOString()
-        };
-        setAdminUser(masterSession);
-        setAdminSession(masterSession);
+    let active = true;
+    const verifySession = async () => {
+      try {
+        const response = await fetch('/api/admin/verify', { credentials: 'include' });
+        const result = await response.json();
+        if (!active) return;
+        if (response.ok && result.valid && result.admin?.role === 'SUPER_ADMIN') {
+          const session = { ...result.admin, authenticatedAt: new Date().toISOString() };
+          setAdminSession(session);
+          setAdminUser(session);
+        } else {
+          setAdminUser(null);
+          router.replace('/admin');
+        }
+      } catch {
+        if (active) router.replace('/admin');
+      } finally {
+        if (active) setIsAuthChecked(true);
       }
     };
-
-    checkAuth();
-
-    window.addEventListener('travel_buddy_admin_auth_changed', checkAuth);
-    window.addEventListener('ente_yathra_admin_auth_changed', checkAuth);
-    return () => {
-      window.removeEventListener('travel_buddy_admin_auth_changed', checkAuth);
-      window.removeEventListener('ente_yathra_admin_auth_changed', checkAuth);
-    };
-  }, []);
+    void verifySession();
+    return () => { active = false; };
+  }, [router]);
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -65,12 +62,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
     await performAdminLogout();
   };
 
-  const currentAdmin = adminUser || {
-    username: 'admin',
-    email: 'admin@travelbuddy.com',
-    name: 'Travel Buddy Super Admin',
-    role: 'SUPER_ADMIN'
-  };
+  const currentAdmin = adminUser;
 
   const navItems = [
     {
@@ -98,6 +90,10 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
       active: false
     }
   ];
+
+  if (!isAuthChecked || !adminUser) {
+    return <div className="min-h-screen bg-[#070a11] text-slate-400 flex items-center justify-center">Verifying admin session…</div>;
+  }
 
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#060810] flex flex-col lg:flex-row text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950">

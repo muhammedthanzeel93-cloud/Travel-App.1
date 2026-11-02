@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../core/config/index.js';
-import { UserRole } from '../features/auth/user.model.js';
+import { User, UserRole } from '../features/auth/user.model.js';
+import { getRequestToken } from '../features/auth/session.js';
 
 export interface AuthenticatedUserPayload {
   id: string;
@@ -16,11 +17,11 @@ export interface AuthenticatedRequest extends Request {
 }
 
 /**
- * Bearer JWT Authentication Middleware
+ * HttpOnly session cookie or compatibility Bearer JWT authentication middleware.
  */
-export const authenticateToken = (req: AuthenticatedRequest, res: Response, next: NextFunction): void => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+export const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> => {
+  const token = getRequestToken(req);
+  if (!token) {
     res.status(401).json({
       success: false,
       message: 'Access denied. Valid Bearer authentication token required.'
@@ -28,10 +29,14 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
     return;
   }
 
-  const token = authHeader.split(' ')[1];
   try {
     const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUserPayload;
-    req.user = decoded;
+    const user = await User.findById(decoded.id).select('username role email name status');
+    if (!user || user.status === 'BLOCKED') {
+      res.status(401).json({ success: false, message: 'Session is no longer valid.' });
+      return;
+    }
+    req.user = { id: user._id.toString(), username: user.username, role: user.role, email: user.email, name: user.name };
     next();
   } catch (err: any) {
     res.status(403).json({
@@ -39,6 +44,21 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
       message: 'Invalid or expired session token. Please sign in again.'
     });
   }
+};
+
+export const optionalAuthenticateToken = async (req: AuthenticatedRequest, _res: Response, next: NextFunction): Promise<void> => {
+  const token = getRequestToken(req);
+  if (!token) { next(); return; }
+  try {
+    const decoded = jwt.verify(token, config.jwtSecret) as AuthenticatedUserPayload;
+    const user = await User.findById(decoded.id).select('username role email name status');
+    if (user && user.status !== 'BLOCKED') {
+      req.user = { id: user._id.toString(), username: user.username, role: user.role, email: user.email, name: user.name };
+    }
+  } catch {
+    // Public reads remain available when an optional session has expired.
+  }
+  next();
 };
 
 /**

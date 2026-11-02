@@ -29,6 +29,7 @@ router.post('/forgot-password/reset', AuthController.resetPassword);
 
 // Current User Profile
 router.get('/me', authenticateToken, AuthController.getProfile);
+router.post('/logout', AuthController.logout);
 
 // User Management (Admin Console - Strictly Protected by Super Admin RBAC)
 router.get('/users', authenticateToken, requireSuperAdmin, AuthController.getAllUsers);

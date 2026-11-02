@@ -11,8 +11,6 @@ import {
   Trash2,
   Ban,
   CheckCircle2,
-  Eye,
-  EyeOff,
   Copy,
   Check,
   ShieldAlert,
@@ -22,7 +20,6 @@ import {
   UserX,
   Phone,
   Mail,
-  KeyRound,
   Shield,
   Volume2,
   VolumeX,
@@ -30,7 +27,6 @@ import {
   Building,
   Crown,
   Compass,
-  Lock
 } from 'lucide-react';
 
 interface UserRecord {
@@ -39,7 +35,6 @@ interface UserRecord {
   name: string;
   email: string;
   phone: string;
-  password?: string;
   role: string;
   status: 'ACTIVE' | 'BLOCKED';
   avatarUrl?: string;
@@ -55,7 +50,6 @@ export default function AdminUsersPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [roleFilter, setRoleFilter] = useState<RoleFilterType>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'BLOCKED'>('ALL');
-  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
@@ -70,7 +64,7 @@ export default function AdminUsersPage() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/auth/users');
+      const res = await fetch('/api/auth/users', { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         if (data.users) {
@@ -87,14 +81,6 @@ export default function AdminUsersPage() {
   useEffect(() => {
     fetchUsers();
   }, []);
-
-  // Toggle reveal password
-  const togglePasswordVisibility = (userId: string) => {
-    setVisiblePasswords((prev) => ({
-      ...prev,
-      [userId]: !prev[userId]
-    }));
-  };
 
   // Copy text to clipboard
   const handleCopy = (text: string, id: string) => {
@@ -117,6 +103,7 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch('/api/auth/users/toggle-block', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, username: user.username })
       });
@@ -156,6 +143,7 @@ export default function AdminUsersPage() {
     try {
       const res = await fetch('/api/auth/users/delete', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           userId: deleteConfirmUser.id,
@@ -530,7 +518,7 @@ export default function AdminUsersPage() {
             <Users className="w-4 h-4 text-amber-400" />
             <h2 className="text-sm font-bold text-white">Database User Accounts ({filteredUsers.length})</h2>
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">Live File &amp; Memory Synchronization</span>
+          <span className="text-[11px] text-slate-400 font-mono">Live MongoDB Records</span>
         </div>
 
         {loading ? (
@@ -553,15 +541,12 @@ export default function AdminUsersPage() {
                   <th className="px-4 py-3.5">Role</th>
                   <th className="px-4 py-3.5">Email ID</th>
                   <th className="px-4 py-3.5">Mobile Number</th>
-                  <th className="px-4 py-3.5">Password</th>
                   <th className="px-4 py-3.5">Status</th>
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60 font-medium">
                 {filteredUsers.map((user) => {
-                  const isPwVisible = !!visiblePasswords[user.id];
-                  const displayPw = user.password || '••••••••';
                   const isBlocked = user.status === 'BLOCKED';
                   const isSuperAdmin = user.role === 'SUPER_ADMIN';
                   const isAdminRole = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
@@ -678,36 +663,6 @@ export default function AdminUsersPage() {
                         ) : (
                           <span className="text-slate-500 italic text-[11px]">Not provided</span>
                         )}
-                      </td>
-
-                      {/* 5. Password with Eye Toggle & Copy */}
-                      <td className="px-4 py-3.5">
-                        <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-950/90 border border-slate-800">
-                          <KeyRound className="w-3 h-3 text-amber-400 shrink-0" />
-                          <span className="font-mono text-xs text-slate-200 select-all">
-                            {isPwVisible ? displayPw : '••••••••••••'}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => togglePasswordVisibility(user.id)}
-                            className="text-slate-400 hover:text-white p-0.5 rounded transition-colors cursor-pointer ml-1"
-                            title={isPwVisible ? 'Hide password' : 'Show password'}
-                          >
-                            {isPwVisible ? <EyeOff className="w-3.5 h-3.5 text-amber-400" /> : <Eye className="w-3.5 h-3.5" />}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCopy(displayPw, `pw_${user.id}`)}
-                            className="text-slate-500 hover:text-slate-200 p-0.5 rounded transition-colors cursor-pointer ml-0.5"
-                            title="Copy password to clipboard"
-                          >
-                            {copiedId === `pw_${user.id}` ? (
-                              <Check className="w-3 h-3 text-emerald-400" />
-                            ) : (
-                              <Copy className="w-3 h-3" />
-                            )}
-                          </button>
-                        </div>
                       </td>
 
                       {/* 6. Status Badge */}

@@ -23,7 +23,7 @@ const server = http.createServer(app);
 // Initialize Socket.io
 const io = new SocketIOServer(server, {
   cors: {
-    origin: '*',
+    origin: config.corsOrigin.split(',').map((origin) => origin.trim()),
     methods: ['GET', 'POST', 'PUT', 'DELETE']
   }
 });
@@ -58,7 +58,7 @@ app.use('/api/v1/auth/forgot-password/request', authLimiter);
 app.use('/api/v1/admin/login', authLimiter);
 
 // Middlewares
-app.use(cors());
+app.use(cors({ origin: config.corsOrigin.split(',').map((origin) => origin.trim()), credentials: true }));
 app.use(express.json({ limit: '20kb' })); // Restrict JSON body size to prevent memory exhaustion
 
 // API Base Route
@@ -76,15 +76,6 @@ app.get('/health', (req: Request, res: Response) => {
     timestamp: new Date().toISOString()
   });
 });
-
-// Database Connection with graceful offline fallback
-mongoose
-  .connect(config.mongoUri)
-  .then(() => console.log('✅ [DATABASE] Connected to MongoDB Atlas / Local Instance successfully.'))
-  .catch((err) => {
-    console.warn('⚠️ [DATABASE] MongoDB not reachable at', config.mongoUri);
-    console.log('⚡ [BACKEND] Running in in-memory resilience mode for testing.');
-  });
 
 // Start Server with Graceful Port Fallback
 let currentPort = Number(config.port) || 5000;
@@ -108,6 +99,21 @@ server.on('error', (err: any) => {
   }
 });
 
-startServer(currentPort);
+async function bootstrap() {
+  if (config.environment === 'production' && (!process.env.JWT_SECRET || process.env.JWT_SECRET.length < 32)) {
+    console.error('[CONFIG] A secure JWT_SECRET is required in production.');
+    process.exit(1);
+  }
+  try {
+    await mongoose.connect(config.mongoUri, { serverSelectionTimeoutMS: 10000 });
+    console.log('[DATABASE] Connected to configured MongoDB instance.');
+    startServer(currentPort);
+  } catch (err) {
+    console.error('[DATABASE] MongoDB connection failed; API startup aborted.', err);
+    process.exit(1);
+  }
+}
+
+if (process.env.NODE_ENV !== 'test') void bootstrap();
 
 export { app, server, io };

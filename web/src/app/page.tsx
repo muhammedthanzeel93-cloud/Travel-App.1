@@ -67,7 +67,6 @@ export default function HomePage() {
   const [signupLoading, setSignupLoading] = useState(false);
   const [signupError, setSignupError] = useState<string | null>(null);
   const [signupSuccessMsg, setSignupSuccessMsg] = useState<string | null>(null);
-  const [signupOtpPreview, setSignupOtpPreview] = useState<string | null>(null);
   const [signupOtpTimer, setSignupOtpTimer] = useState(60);
 
   // Forgot Password States (3 Steps: 1. Identifier -> 2. OTP -> 3. New Password)
@@ -82,7 +81,6 @@ export default function HomePage() {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [forgotError, setForgotError] = useState<string | null>(null);
   const [forgotSuccessMsg, setForgotSuccessMsg] = useState<string | null>(null);
-  const [forgotOtpPreview, setForgotOtpPreview] = useState<string | null>(null);
 
   // Initial Check for Existing User Session & Verify Administrator Block Status
   useEffect(() => {
@@ -90,16 +88,22 @@ export default function HomePage() {
     if (session) {
       setCurrentUser(session);
       // Immediately verify with server if user has been blocked by administrator
-      fetch(`/api/auth/check-status?username=${encodeURIComponent(session.username)}`)
+      fetch('/api/auth/me', { credentials: 'include' })
         .then((r) => r.json())
         .then((data) => {
-          if (data && (data.status === 'BLOCKED' || data.isBlocked)) {
+          if (!data?.success || !data.user) {
             clearUserSession();
             setCurrentUser(null);
-            setLoginError(`Your account (@${session.username}) has been BLOCKED by the administrator. Access is disabled.`);
+          } else {
+            const refreshedSession = { ...session, ...data.user };
+            setUserSession(refreshedSession);
+            setCurrentUser(refreshedSession);
           }
         })
-        .catch(() => {});
+        .catch(() => {
+          clearUserSession();
+          setCurrentUser(null);
+        });
     }
     setIsCheckingSession(false);
 
@@ -156,7 +160,7 @@ export default function HomePage() {
     setLoginError(null);
 
     const cleanUsername = loginUsername.trim();
-    const cleanPassword = loginPassword.trim();
+    const cleanPassword = loginPassword;
 
     if (!cleanUsername || !cleanPassword) {
       setLoginError('Please enter both your username and password.');
@@ -168,7 +172,6 @@ export default function HomePage() {
     try {
       const res = await fetchFromApi<{
         success: boolean;
-        token: string;
         user: any;
         message?: string;
         blocked?: boolean;
@@ -192,7 +195,7 @@ export default function HomePage() {
         return;
       }
 
-      if (res.success && res.token && res.user) {
+      if (res.success && res.user) {
         const session: UserSession = {
           id: res.user.id || `user_${Date.now()}`,
           username: res.user.username,
@@ -202,7 +205,6 @@ export default function HomePage() {
           role: res.user.role || 'USER',
           avatarUrl: res.user.avatarUrl,
           bio: res.user.bio,
-          token: res.token,
           authenticatedAt: new Date().toISOString()
         };
 
@@ -272,7 +274,6 @@ export default function HomePage() {
       const otpRes = await fetchFromApi<{
         success: boolean;
         message?: string;
-        otpPreview?: string;
         target?: string;
       }>('/auth/send-otp', {
         method: 'POST',
@@ -284,7 +285,6 @@ export default function HomePage() {
       });
 
       if (otpRes.success) {
-        setSignupOtpPreview(otpRes.otpPreview || null);
         setSignupOtpTimer(60);
         setSignupStep(2);
         setSignupSuccessMsg(
@@ -365,7 +365,6 @@ export default function HomePage() {
       const res = await fetchFromApi<{
         success: boolean;
         message?: string;
-        token: string;
         user: any;
       }>('/auth/register', {
         method: 'POST',
@@ -377,17 +376,16 @@ export default function HomePage() {
         })
       });
 
-      if (res.success && res.token && res.user) {
+      if (res.success && res.user) {
         const session: UserSession = {
           id: res.user.id || `user_${Date.now()}`,
           username: res.user.username,
           name: res.user.name,
           email: res.user.email,
           phone: res.user.phone,
-          role: res.user.role || 'TRAVELER',
+          role: res.user.role || 'USER',
           avatarUrl: res.user.avatarUrl,
           bio: res.user.bio,
-          token: res.token,
           authenticatedAt: new Date().toISOString()
         };
 
@@ -424,17 +422,15 @@ export default function HomePage() {
         message?: string;
         target?: string;
         maskedTarget?: string;
-        otpPreview?: string;
         username?: string;
       }>('/auth/forgot-password/request', {
         method: 'POST',
         body: JSON.stringify({ identifier: cleanIdentifier })
       });
 
-      if (res.success && res.target) {
-        setForgotTarget(res.target);
-        setForgotMaskedTarget(res.maskedTarget || res.target);
-        setForgotOtpPreview(res.otpPreview || null);
+      if (res.success) {
+        setForgotTarget(cleanIdentifier);
+        setForgotMaskedTarget('your registered contact');
         setForgotStep(2);
         setForgotSuccessMsg(`Verification code sent to ${res.maskedTarget || res.target}`);
       } else {
@@ -467,7 +463,8 @@ export default function HomePage() {
         method: 'POST',
         body: JSON.stringify({
           target: forgotTarget,
-          otp: cleanOtp
+          otp: cleanOtp,
+          type: 'PASSWORD_RESET'
         })
       });
 
@@ -750,7 +747,7 @@ export default function HomePage() {
 
                     {/* Forgot Password Link Under Password Field */}
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px] text-slate-500">Must be at least 6 characters</span>
+                      <span className="text-[11px] text-slate-500">Enter your account password</span>
                       <button
                         type="button"
                         onClick={handleGoToForgotPassword}
@@ -951,31 +948,6 @@ export default function HomePage() {
                 {/* STEP 2: Enter & Verify OTP */}
                 {signupStep === 2 && (
                   <form onSubmit={handleSignupVerifyOtp} className="space-y-5">
-                    {/* Demo OTP Preview Banner */}
-                    {signupOtpPreview && (
-                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
-                            <KeyRound className="w-3.5 h-3.5" />
-                            <span>Verification OTP Code:</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setSignupOtp(signupOtpPreview)}
-                            className="text-[10px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold cursor-pointer hover:bg-amber-400 transition-colors"
-                          >
-                            Paste Code
-                          </button>
-                        </div>
-                        <span className="font-mono text-2xl font-black text-amber-400 tracking-widest block text-center">
-                          {signupOtpPreview}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block text-center">
-                          (Valid for 10 minutes)
-                        </span>
-                      </div>
-                    )}
-
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-300 block text-center">
                         Enter 6-Digit OTP Code
@@ -1040,6 +1012,7 @@ export default function HomePage() {
                         <input
                           type={showSignupPassword ? 'text' : 'password'}
                           required
+                          minLength={10}
                           value={signupPassword}
                           onChange={(e) => setSignupPassword(e.target.value)}
                           placeholder="Password"
@@ -1064,6 +1037,7 @@ export default function HomePage() {
                       <input
                         type={showSignupPassword ? 'text' : 'password'}
                         required
+                        minLength={10}
                         value={signupConfirmPassword}
                         onChange={(e) => setSignupConfirmPassword(e.target.value)}
                         placeholder="Confirm Password"
@@ -1186,31 +1160,6 @@ export default function HomePage() {
                 {/* STEP 2: Enter & Verify Reset OTP */}
                 {forgotStep === 2 && (
                   <form onSubmit={handleForgotVerifyOtp} className="space-y-5">
-                    {/* Demo OTP Preview */}
-                    {forgotOtpPreview && (
-                      <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-bold text-amber-300 flex items-center gap-1.5">
-                            <KeyRound className="w-3.5 h-3.5" />
-                            <span>Password Reset OTP Code:</span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => setForgotOtp(forgotOtpPreview)}
-                            className="text-[10px] px-2 py-0.5 rounded bg-amber-500 text-slate-950 font-bold cursor-pointer hover:bg-amber-400 transition-colors"
-                          >
-                            Paste Code
-                          </button>
-                        </div>
-                        <span className="font-mono text-2xl font-black text-amber-400 tracking-widest block text-center">
-                          {forgotOtpPreview}
-                        </span>
-                        <span className="text-[10px] text-slate-400 block text-center">
-                          (Valid for 10 minutes)
-                        </span>
-                      </div>
-                    )}
-
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-slate-300 block text-center">
                         Enter 6-Digit OTP Code

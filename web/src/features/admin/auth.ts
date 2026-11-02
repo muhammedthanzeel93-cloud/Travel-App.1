@@ -3,7 +3,6 @@ import { AdminUserSession } from './types';
 export type { AdminUserSession };
 
 const ADMIN_USER_KEY = 'travel_buddy_admin_user';
-const ADMIN_TOKEN_KEY = 'travel_buddy_admin_token';
 const ADMIN_AUTH_EVENT = 'travel_buddy_admin_auth_changed';
 
 export function getAdminSession(): AdminUserSession | null {
@@ -12,7 +11,7 @@ export function getAdminSession(): AdminUserSession | null {
     const raw = localStorage.getItem(ADMIN_USER_KEY) || localStorage.getItem('ente_yathra_admin_user');
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (parsed?.role === 'SUPER_ADMIN' && parsed?.token) {
+    if (parsed?.role === 'SUPER_ADMIN' && parsed?.username) {
       return parsed;
     }
     return null;
@@ -24,7 +23,7 @@ export function getAdminSession(): AdminUserSession | null {
 export function setAdminSession(session: AdminUserSession): void {
   if (typeof window === 'undefined') return;
   localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(session));
-  localStorage.setItem(ADMIN_TOKEN_KEY, session.token);
+  localStorage.removeItem('travel_buddy_admin_token');
   // Clean up legacy keys
   localStorage.removeItem('ente_yathra_admin_user');
   localStorage.removeItem('ente_yathra_admin_token');
@@ -35,32 +34,21 @@ export function setAdminSession(session: AdminUserSession): void {
 export async function performAdminLogout(): Promise<void> {
   if (typeof window === 'undefined') return;
 
-  const token = localStorage.getItem(ADMIN_TOKEN_KEY);
-  const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-
   try {
-    fetch(`${backendUrl}/api/v1/admin/logout`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {})
-      }
-    }).catch(() => {});
+    await fetch('/api/admin/logout', { method: 'POST', credentials: 'include' });
   } catch {
-    // Ignore network errors during logout
+    // Clear local profile cache even if the API is unavailable.
   }
 
   // Purge all admin storage
   localStorage.removeItem(ADMIN_USER_KEY);
-  localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem('travel_buddy_admin_token');
   localStorage.removeItem('ente_yathra_admin_user');
   localStorage.removeItem('ente_yathra_admin_token');
 
   try {
     sessionStorage.clear();
   } catch {}
-
-  document.cookie = 'travel_buddy_admin_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
 
   // Broadcast event to active UI components
   window.dispatchEvent(new Event(ADMIN_AUTH_EVENT));

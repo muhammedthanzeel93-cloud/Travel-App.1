@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { playChime } from '@/lib/soundAlert';
 import {
   ShieldAlert,
@@ -21,6 +21,14 @@ import {
 export default function SuperAdminPlatformDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
+  const [registeredUserCount, setRegisteredUserCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    fetch('/api/auth/users', { credentials: 'include' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Unable to load user count.')))
+      .then((data) => setRegisteredUserCount(typeof data.count === 'number' ? data.count : 0))
+      .catch(() => setRegisteredUserCount(null));
+  }, []);
 
   const playAlertSound = () => {
     playChime('success', soundEnabled);
@@ -93,9 +101,9 @@ export default function SuperAdminPlatformDashboard() {
             </div>
           </div>
           <div className="mt-4">
-            <span className="text-3xl font-black text-white block">5</span>
+            <span className="text-3xl font-black text-white block">{registeredUserCount ?? '—'}</span>
             <span className="text-[11px] font-semibold text-purple-400 mt-1 flex items-center gap-1">
-              <span>Active Community Database</span>
+              <span>Registered MongoDB accounts</span>
               <span className="text-[10px] text-slate-500 group-hover:text-purple-300 transition-colors">
                 → Manage Users
               </span>
@@ -113,11 +121,10 @@ export default function SuperAdminPlatformDashboard() {
           </div>
           <div className="mt-4">
             <div className="flex items-center gap-2">
-              <span className="text-3xl font-black text-white">1</span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="text-xl font-black text-white">Not tracked</span>
             </div>
             <span className="text-[11px] font-semibold text-emerald-400 mt-1 block">
-              Super Admin Session Active
+              Live session presence is not implemented
             </span>
           </div>
         </div>
@@ -187,7 +194,7 @@ export default function SuperAdminPlatformDashboard() {
               <span className="w-2 h-2 rounded-full bg-emerald-400" />
               <span>Database Active</span>
             </span>
-            <span className="text-[10px] text-slate-500 block font-mono">Dual-Layer MongoDB &amp; File Vault</span>
+            <span className="text-[10px] text-slate-500 block font-mono">MongoDB (required backend store)</span>
           </div>
 
           <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800/80 space-y-1">

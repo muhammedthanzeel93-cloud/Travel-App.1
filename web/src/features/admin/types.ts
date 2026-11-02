@@ -9,6 +9,5 @@ export interface AdminUserSession {
   email: string;
   name: string;
   role: 'SUPER_ADMIN';
-  token: string;
   authenticatedAt: string;
 }
