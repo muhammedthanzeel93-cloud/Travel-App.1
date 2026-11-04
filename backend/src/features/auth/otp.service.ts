@@ -15,9 +15,6 @@ export function verifyOtpDigest(code: string, expectedHash: string): boolean {
 export async function createAndDispatchOtp(target: string, purpose: AuthChallengePurpose, channel: 'email' | 'sms') {
   const webhookUrl = process.env.OTP_DELIVERY_WEBHOOK_URL;
   const webhookToken = process.env.OTP_DELIVERY_WEBHOOK_TOKEN;
-  if (!webhookUrl || !webhookToken) {
-    throw new Error('OTP delivery is not configured. Set OTP_DELIVERY_WEBHOOK_URL and OTP_DELIVERY_WEBHOOK_TOKEN.');
-  }
 
   const code = randomInt(100000, 1000000).toString();
   const normalizedTarget = target.trim().toLowerCase();
@@ -28,6 +25,23 @@ export async function createAndDispatchOtp(target: string, purpose: AuthChalleng
     { $set: { codeHash: digest(code), expiresAt, attempts: 0, createdAt: new Date() }, $unset: { verifiedAt: 1 } },
     { upsert: true, new: true, runValidators: true }
   );
+
+  // Development fallback: log OTP to terminal when webhook is not configured
+  if (!webhookUrl || !webhookToken) {
+    if (process.env.NODE_ENV === 'production') {
+      await AuthChallenge.deleteOne({ target: normalizedTarget, purpose });
+      throw new Error('OTP delivery is not configured. Set OTP_DELIVERY_WEBHOOK_URL and OTP_DELIVERY_WEBHOOK_TOKEN.');
+    }
+    console.log(`\n┌─────────────────────────────────────────┐`);
+    console.log(`│          🔑  DEV OTP (terminal)         │`);
+    console.log(`│  Target  : ${target.padEnd(29)}│`);
+    console.log(`│  Channel : ${channel.padEnd(29)}│`);
+    console.log(`│  Purpose : ${purpose.padEnd(29)}│`);
+    console.log(`│  Code    : ${code.padEnd(29)}│`);
+    console.log(`│  Expires : 10 minutes                   │`);
+    console.log(`└─────────────────────────────────────────┘\n`);
+    return { expiresInSeconds: 600 };
+  }
 
   try {
     const response = await fetch(webhookUrl, {
