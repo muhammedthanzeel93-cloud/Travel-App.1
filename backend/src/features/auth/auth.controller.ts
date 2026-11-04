@@ -1,12 +1,16 @@
 import { Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { User, IUser, UserRole } from './user.model.js';
 import { AuthChallenge } from './authChallenge.model.js';
 import { consumeVerifiedOtp, createAndDispatchOtp, verifyOtp } from './otp.service.js';
-import { clearSessionCookie, setSessionCookie } from './session.js';
+import { clearSessionCookie, getRequestToken, setSessionCookie } from './session.js';
 import { issueSessionToken } from './token.js';
 import { OperationsHubSocket } from '../../core/sockets/operationsHub.js';
+import { config } from '../../core/config/index.js';
+
+export const ACTIVE_PRESENCE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 const isDbConnected = () => mongoose.connection.readyState === 1;
 const normalizeEmail = (value: unknown) => String(value || '').trim().toLowerCase();
@@ -102,7 +106,7 @@ export class AuthController {
       const user = await User.create({
         username: cleanUsername, name: String(name || cleanUsername).trim().slice(0, 100), email: cleanEmail,
         phone: cleanPhone, passwordHash, role: 'USER' as UserRole, status: 'ACTIVE',
-        avatarUrl: undefined, bio: ''
+        avatarUrl: undefined, bio: '', lastActiveAt: new Date()
       });
       await consumeVerifiedOtp(target, 'REGISTRATION');
       const token = issueSessionToken(user, '24h');
@@ -136,6 +140,10 @@ export class AuthController {
       if (user.status === 'BLOCKED') {
         res.status(403).json({ success: false, blocked: true, message: 'This account is blocked.' });
         return;
+      }
+      if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+        user.lastActiveAt = new Date();
+        await user.save();
       }
       const token = issueSessionToken(user, '24h');
       setSessionCookie(res, token, 24 * 60 * 60);
@@ -213,6 +221,9 @@ export class AuthController {
         res.status(404).json({ success: false, message: 'User not found.' });
         return;
       }
+      if (user.role !== 'SUPER_ADMIN' && user.role !== 'ADMIN') {
+        await User.updateOne({ _id: user._id }, { $set: { lastActiveAt: new Date() } });
+      }
       res.status(200).json({ success: true, user: safeUser(user) });
     } catch {
       res.status(401).json({ success: false, message: 'Invalid or expired session.' });
@@ -220,18 +231,91 @@ export class AuthController {
   }
 
   public static async logout(req: Request, res: Response): Promise<void> {
+    try {
+      const token = getRequestToken(req);
+      if (token) {
+        const decoded = jwt.verify(token, config.jwtSecret) as { id?: string };
+        if (decoded?.id && mongoose.isValidObjectId(decoded.id)) {
+          await User.updateOne({ _id: decoded.id }, { $set: { lastActiveAt: null } });
+        }
+      }
+    } catch {
+      // Ignore token verification errors on logout
+    }
     clearSessionCookie(res);
     res.status(200).json({ success: true, message: 'Signed out.' });
+  }
+
+  public static async heartbeat(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
+    try {
+      const authenticatedUser = (req as any).user;
+      if (!authenticatedUser?.id || !mongoose.isValidObjectId(authenticatedUser.id)) {
+        res.status(401).json({ success: false, message: 'Valid traveler session required.' });
+        return;
+      }
+      // Never count admins in active user presence
+      if (authenticatedUser.role === 'SUPER_ADMIN' || authenticatedUser.role === 'ADMIN') {
+        res.status(200).json({ success: true, active: false, ignored: true, message: 'Admin session excluded from active traveler metrics.' });
+        return;
+      }
+      const result = await User.updateOne(
+        { _id: authenticatedUser.id, status: 'ACTIVE', role: { $nin: ['ADMIN', 'SUPER_ADMIN'] } },
+        { $set: { lastActiveAt: new Date() } }
+      );
+      if (result.matchedCount === 0) {
+        res.status(403).json({ success: false, message: 'Account is not an active traveler.' });
+        return;
+      }
+      res.status(200).json({ success: true, active: true, message: 'Presence updated.' });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to update heartbeat.' });
+    }
+  }
+
+  public static async getActiveUserCount(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
+    try {
+      const threshold = new Date(Date.now() - ACTIVE_PRESENCE_WINDOW_MS);
+      const activeUserCount = await User.countDocuments({
+        role: { $nin: ['ADMIN', 'SUPER_ADMIN'] },
+        status: 'ACTIVE',
+        lastActiveAt: { $gte: threshold }
+      });
+      res.status(200).json({
+        success: true,
+        activeUserCount,
+        windowSeconds: ACTIVE_PRESENCE_WINDOW_MS / 1000
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to calculate active user count.' });
+    }
   }
 
   public static async getAllUsers(req: Request, res: Response): Promise<void> {
     if (!requireDatabase(res)) return;
     try {
-      const users = await User.find({}).select('username name email phone role status avatarUrl bio createdAt').sort({ createdAt: -1 }).lean();
-      res.status(200).json({ success: true, count: users.length, users: users.map((user: any) => ({
-        id: user._id.toString(), username: user.username, name: user.name, email: user.email || '', phone: user.phone || '',
-        role: user.role || 'USER', status: user.status || 'ACTIVE', avatarUrl: user.avatarUrl, bio: user.bio || '', createdAt: user.createdAt
-      })) });
+      const threshold = new Date(Date.now() - ACTIVE_PRESENCE_WINDOW_MS);
+      const [users, activeUserCount] = await Promise.all([
+        User.find({}).select('username name email phone role status avatarUrl bio lastActiveAt createdAt').sort({ createdAt: -1 }).lean(),
+        User.countDocuments({
+          role: { $nin: ['ADMIN', 'SUPER_ADMIN'] },
+          status: 'ACTIVE',
+          lastActiveAt: { $gte: threshold }
+        })
+      ]);
+      const registeredTravelersCount = users.filter((u: any) => u.role !== 'SUPER_ADMIN' && u.role !== 'ADMIN').length;
+      res.status(200).json({
+        success: true,
+        count: users.length,
+        registeredTravelersCount,
+        activeUserCount,
+        users: users.map((user: any) => ({
+          id: user._id.toString(), username: user.username, name: user.name, email: user.email || '', phone: user.phone || '',
+          role: user.role || 'USER', status: user.status || 'ACTIVE', avatarUrl: user.avatarUrl, bio: user.bio || '',
+          lastActiveAt: user.lastActiveAt || null, createdAt: user.createdAt
+        }))
+      });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to load users.' });
     }

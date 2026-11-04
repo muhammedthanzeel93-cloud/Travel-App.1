@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { playChime } from '@/lib/soundAlert';
 import {
   ShieldAlert,
@@ -22,13 +22,32 @@ export default function SuperAdminPlatformDashboard() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [registeredUserCount, setRegisteredUserCount] = useState<number | null>(null);
+  const [activeUserCount, setActiveUserCount] = useState<number | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadDashboardMetrics = useCallback(async () => {
+    setIsRefreshing(true);
+    try {
+      const response = await fetch('/api/auth/users', { credentials: 'include' });
+      if (!response.ok) throw new Error('Unable to load dashboard metrics.');
+      const data = await response.json();
+      setRegisteredUserCount(typeof data.registeredTravelersCount === 'number' ? data.registeredTravelersCount : (typeof data.count === 'number' ? data.count : 0));
+      setActiveUserCount(typeof data.activeUserCount === 'number' ? data.activeUserCount : 0);
+    } catch {
+      // Keep previous state if background request failed
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    fetch('/api/auth/users', { credentials: 'include' })
-      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Unable to load user count.')))
-      .then((data) => setRegisteredUserCount(typeof data.count === 'number' ? data.count : 0))
-      .catch(() => setRegisteredUserCount(null));
-  }, []);
+    void loadDashboardMetrics();
+    // Auto-refresh active users count every 15 seconds
+    const interval = setInterval(() => {
+      void loadDashboardMetrics();
+    }, 15_000);
+    return () => clearInterval(interval);
+  }, [loadDashboardMetrics]);
 
   const playAlertSound = () => {
     playChime('success', soundEnabled);
@@ -66,12 +85,13 @@ export default function SuperAdminPlatformDashboard() {
 
           <button
             onClick={() => {
-              setActionSuccessMessage('Dashboard refreshed: Database and core platform services operational.');
+              void loadDashboardMetrics();
+              setActionSuccessMessage('Dashboard refreshed: Database and live active users synchronized.');
               playAlertSound();
             }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-200 hover:text-white border border-slate-700 text-xs font-bold transition-colors cursor-pointer"
           >
-            <RefreshCw className="w-3.5 h-3.5 text-blue-400" />
+            <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isRefreshing ? 'animate-spin' : ''}`} />
             <span>Refresh</span>
           </button>
 
@@ -120,11 +140,17 @@ export default function SuperAdminPlatformDashboard() {
             </div>
           </div>
           <div className="mt-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xl font-black text-white">Not tracked</span>
+            <div className="flex items-center gap-2.5">
+              <span className="text-3xl font-black text-white block">
+                {activeUserCount !== null ? activeUserCount : '—'}
+              </span>
+              <span className="flex h-2.5 w-2.5 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+              </span>
             </div>
             <span className="text-[11px] font-semibold text-emerald-400 mt-1 block">
-              Live session presence is not implemented
+              Active registered users online (admins excluded)
             </span>
           </div>
         </div>

@@ -39,6 +39,7 @@ interface UserRecord {
   status: 'ACTIVE' | 'BLOCKED';
   avatarUrl?: string;
   bio?: string;
+  lastActiveAt?: string | null;
   createdAt?: string;
 }
 
@@ -197,6 +198,11 @@ export default function AdminUsersPage() {
   const travelerCount = users.filter((u) => u.role === 'TRAVELER').length;
   const activeCount = users.filter((u) => u.status !== 'BLOCKED').length;
   const blockedCount = users.filter((u) => u.status === 'BLOCKED').length;
+  const now = Date.now();
+  const onlineTravelersCount = users.filter((u) => {
+    if (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN' || u.status === 'BLOCKED' || !u.lastActiveAt) return false;
+    return (now - new Date(u.lastActiveAt).getTime()) <= 5 * 60 * 1000;
+  }).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -275,7 +281,7 @@ export default function AdminUsersPage() {
           <div className="mt-3">
             <span className="text-2xl sm:text-3xl font-black text-white block">{users.length}</span>
             <span className="text-[11px] font-semibold text-amber-400 mt-1 block">
-              {activeCount} Active • {blockedCount} Blocked
+              {activeCount} Active • {blockedCount} Blocked • {onlineTravelersCount} Online Now
             </span>
           </div>
         </div>
@@ -586,6 +592,12 @@ export default function AdminUsersPage() {
                               </span>
                               {isAdminRole && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
                               {isUserRole && <User className="w-3 h-3 text-emerald-400 shrink-0" />}
+                              {!isAdminRole && user.status === 'ACTIVE' && user.lastActiveAt && (now - new Date(user.lastActiveAt).getTime()) <= 5 * 60 * 1000 && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                  <span>ONLINE</span>
+                                </span>
+                              )}
                             </div>
                             <span className="text-[11px] text-amber-400 font-mono block truncate">
                               @{user.username}

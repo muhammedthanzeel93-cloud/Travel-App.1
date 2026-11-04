@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import ContentContainer from '@/components/ContentContainer';
+import UserPresenceTracker from '@/components/UserPresenceTracker';
 
 export const metadata: Metadata = {
   title: 'Travel Buddy | Social Travel Feed & Community',
@@ -20,6 +21,7 @@ export default function RootLayout({
         <meta name="theme-color" content="#0b0f19" />
       </head>
       <body className="min-h-screen bg-[#0b0f19] text-slate-100 flex flex-col font-sans selection:bg-amber-500 selection:text-slate-950">
+        <UserPresenceTracker />
         <Header />
         <ContentContainer>
           {children}

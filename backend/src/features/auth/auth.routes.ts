@@ -22,10 +22,12 @@ router.post('/forgot-password/reset', AuthController.resetPassword);
 
 // Current User Profile
 router.get('/me', authenticateToken, AuthController.getProfile);
+router.post('/heartbeat', authenticateToken, AuthController.heartbeat);
 router.post('/logout', AuthController.logout);
 
 // User Management (Admin Console - Strictly Protected by Super Admin RBAC)
 router.get('/users', authenticateToken, requireSuperAdmin, AuthController.getAllUsers);
+router.get('/active-count', authenticateToken, requireSuperAdmin, AuthController.getActiveUserCount);
 router.post('/users/delete', authenticateToken, requireSuperAdmin, AuthController.deleteUser);
 router.post('/users/toggle-block', authenticateToken, requireSuperAdmin, AuthController.toggleBlockUser);
 

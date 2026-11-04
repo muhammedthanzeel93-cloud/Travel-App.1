@@ -33,6 +33,7 @@ export interface IUser extends Document {
   followers: mongoose.Types.ObjectId[];
   following: mongoose.Types.ObjectId[];
   isVerified: boolean;
+  lastActiveAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -97,9 +98,12 @@ const UserSchema = new Schema<IUser>(
     followingCount: { type: Number, default: 0 },
     followers: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     following: [{ type: Schema.Types.ObjectId, ref: 'User' }],
-    isVerified: { type: Boolean, default: false }
+    isVerified: { type: Boolean, default: false },
+    lastActiveAt: { type: Date, default: null, index: true }
   },
   { timestamps: true }
 );
+
+UserSchema.index({ role: 1, status: 1, lastActiveAt: -1 });
 
 export const User = mongoose.model<IUser>('User', UserSchema);

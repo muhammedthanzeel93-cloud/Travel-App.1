@@ -9,8 +9,9 @@
     "start": "node dist/server.js",
     "admin:bootstrap": "tsx src/scripts/bootstrap-admin.ts",
     "social:migrate": "tsx src/scripts/migrate-social-content.ts",
-    "test": "tsx test/security-regression.test.ts",
-    "test:all": "tsx test/security-regression.test.ts"
+    "test": "tsx test/active-users.test.ts",
+    "test:all": "tsx test/active-users.test.ts",
+    "test:security": "tsx test/security-regression.test.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

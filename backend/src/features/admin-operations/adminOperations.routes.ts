@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import { AdminOperationsController } from './adminOperations.controller.js';
+import { authenticateToken, requireSuperAdmin } from '../../middlewares/auth.middleware.js';
+import { AuthController } from '../auth/auth.controller.js';
 
 const router = Router();
 
@@ -9,5 +11,6 @@ router.post('/login/validate', AdminOperationsController.validateAdminCredential
 router.post('/login/verify-otp', AdminOperationsController.verifyAdminOtp);
 router.get('/verify', AdminOperationsController.verifyAdminToken);
 router.post('/logout', AdminOperationsController.logoutAdmin);
+router.get('/active-users', authenticateToken, requireSuperAdmin, AuthController.getActiveUserCount);
 
 export default router;
