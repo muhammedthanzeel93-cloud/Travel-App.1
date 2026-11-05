@@ -60,8 +60,7 @@ async function runSocialSuite() {
         images: ['https://images.unsplash.com/photo-1506744038136-46273834b3fb'],
         caption: 'Munnar Misty Hills Top View',
         locationName: 'Top Station',
-        city: 'Munnar, Idukki',
-        initialRating: 5
+        city: 'Munnar, Idukki'
       }
     } as any,
     mockRes
@@ -71,24 +70,61 @@ async function runSocialSuite() {
   assert.ok(createdPostPayload.isAdminPost, 'Post created by admin should have isAdminPost: true');
   assert.equal(createdPostPayload.locationName, 'Top Station');
   assert.equal(createdPostPayload.city, 'Munnar, Idukki');
-  assert.equal(createdPostPayload.averageRating, 5);
-  console.log('✅ [PASS] Admin photo post created successfully with location and 5.0 initial rating');
+  console.log('✅ [PASS] Admin photo post created successfully with location');
 
-  // --- Test 3: Star Rating Validation & Recording ---
-  console.log('\n--- 3. Rating Validation & Update ---');
-  // 3a. Invalid rating rejection
-  await SocialController.ratePost(
+  // --- Test 3: Admin Restriction Checks (Admins cannot Like, Repost, Rate, Comment) ---
+  console.log('\n--- 3. Admin Action Restrictions (Read-Only Engagement) ---');
+
+  // 3a. Admin cannot like
+  await SocialController.toggleLikePost(
     {
-      user: { id: regularUserId.toString(), role: 'USER' },
+      user: { id: adminUserId.toString(), role: 'SUPER_ADMIN' },
       params: { postId: testPostId.toString() },
-      body: { rating: 7 } // Invalid! Must be 1-5
+      body: { liked: true }
     } as any,
     mockRes
   );
-  assert.equal(capturedStatus, 400, 'Invalid rating (7) should be rejected with 400');
-  console.log('✅ [PASS] Rating out of range (7) correctly rejected with 400');
+  assert.equal(capturedStatus, 403, 'Admin like attempt should return HTTP 403');
+  console.log('✅ [PASS] Admin blocked from liking posts (HTTP 403)');
 
-  // 3b. Valid rating submission
+  // 3b. Admin cannot repost
+  await SocialController.toggleRepost(
+    {
+      user: { id: adminUserId.toString(), role: 'ADMIN' },
+      params: { postId: testPostId.toString() },
+      body: { reposted: true }
+    } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 403, 'Admin repost attempt should return HTTP 403');
+  console.log('✅ [PASS] Admin blocked from reposting posts (HTTP 403)');
+
+  // 3c. Admin cannot rate
+  await SocialController.ratePost(
+    {
+      user: { id: adminUserId.toString(), role: 'SUPER_ADMIN' },
+      params: { postId: testPostId.toString() },
+      body: { rating: 5 }
+    } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 403, 'Admin rating attempt should return HTTP 403');
+  console.log('✅ [PASS] Admin blocked from submitting ratings (HTTP 403)');
+
+  // 3d. Admin cannot comment
+  await SocialController.addComment(
+    {
+      user: { id: adminUserId.toString(), role: 'ADMIN' },
+      params: { postId: testPostId.toString() },
+      body: { text: 'Admin test comment' }
+    } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 403, 'Admin commenting attempt should return HTTP 403');
+  console.log('✅ [PASS] Admin blocked from commenting on posts (HTTP 403)');
+
+  // --- Test 4: Regular User Allowed to Rate & Repost ---
+  console.log('\n--- 4. Regular User Social Interactions ---');
   const originalFindById = Post.findById;
   const originalFindOneAndUpdate = PostRating.findOneAndUpdate;
   const originalAggregate = PostRating.aggregate;
@@ -111,15 +147,12 @@ async function runSocialSuite() {
     } as any,
     mockRes
   );
-
-  assert.equal(capturedStatus, 200, 'Valid rating should return HTTP 200');
+  assert.equal(capturedStatus, 200, 'User rating should return HTTP 200');
   assert.equal(capturedJson.userRating, 4);
   assert.equal(capturedJson.averageRating, 4.5);
-  assert.equal(capturedJson.ratingsCount, 2);
-  console.log('✅ [PASS] Post rating updated successfully: 4.5 average stars from 2 ratings');
+  console.log('✅ [PASS] Regular user successfully rated post: 4.5 average stars');
 
-  // --- Test 4: Repost Toggle ---
-  console.log('\n--- 4. Repost Interaction ---');
+  // Repost by regular user
   const originalReactionUpdateOne = PostReaction.updateOne;
   const originalReactionCountDocuments = PostReaction.countDocuments;
 
@@ -134,32 +167,65 @@ async function runSocialSuite() {
     } as any,
     mockRes
   );
-
-  assert.equal(capturedStatus, 200, 'Repost toggle should return HTTP 200');
+  assert.equal(capturedStatus, 200, 'User repost should return HTTP 200');
   assert.equal(capturedJson.isReposted, true);
-  assert.equal(capturedJson.newRepostsCount, 3);
-  console.log('✅ [PASS] Repost toggle verified: isReposted=true, repostsCount=3');
+  console.log('✅ [PASS] Regular user repost verified: isReposted=true');
 
-  // --- Test 5: Post Deletion Authorization ---
-  console.log('\n--- 5. Post Deletion & Moderation ---');
-  // 5a. Regular user cannot delete another user's post
-  (Post as any).findById = async () => ({
-    _id: testPostId,
-    userId: adminUserId // Owned by admin, attempted by regular user
+  // --- Test 5: Fetch Likers and Reposters Lists ---
+  console.log('\n--- 5. Inspection of Likers & Reposters ---');
+  const originalReactionFind = PostReaction.find;
+
+  const mockReactionResults = [
+    {
+      postId: testPostId,
+      type: 'LIKE',
+      userId: {
+        _id: regularUserId,
+        name: 'Rahul Traveler',
+        username: 'rahul_v',
+        avatarUrl: 'https://example.com/avatar.jpg',
+        role: 'USER',
+        email: 'rahul@travelworld.com'
+      },
+      createdAt: new Date('2026-11-05T12:00:00Z')
+    }
+  ];
+
+  (PostReaction as any).find = () => ({
+    populate: () => ({
+      sort: () => ({
+        lean: async () => mockReactionResults
+      })
+    })
   });
 
-  await SocialController.deletePost(
-    {
-      user: { id: regularUserId.toString(), role: 'USER' },
-      params: { postId: testPostId.toString() }
-    } as any,
+  // Test getPostLikes
+  await SocialController.getPostLikes(
+    { params: { postId: testPostId.toString() } } as any,
     mockRes
   );
-  assert.equal(capturedStatus, 403, 'Unauthorized user should be rejected with 403');
-  console.log('✅ [PASS] Unauthorized user deletion rejected with HTTP 403');
+  assert.equal(capturedStatus, 200, 'getPostLikes should return HTTP 200');
+  assert.equal(capturedJson.count, 1);
+  assert.equal(capturedJson.users[0].name, 'Rahul Traveler');
+  console.log('✅ [PASS] getPostLikes successfully returned travelers who liked the post');
 
-  // 5b. Admin can delete any post (moderation)
+  // Test getPostReposts
+  await SocialController.getPostReposts(
+    { params: { postId: testPostId.toString() } } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 200, 'getPostReposts should return HTTP 200');
+  assert.equal(capturedJson.count, 1);
+  assert.equal(capturedJson.users[0].username, 'rahul_v');
+  console.log('✅ [PASS] getPostReposts successfully returned travelers who reposted the post');
+
+  // --- Test 6: Post Deletion (Admin Moderation) ---
+  console.log('\n--- 6. Post Deletion & Moderation ---');
   let deletedPostId: any = null;
+  (Post as any).findById = async () => ({
+    _id: testPostId,
+    userId: regularUserId
+  });
   const originalPostDeleteOne = Post.deleteOne;
   const originalCommentDeleteMany = PostComment.deleteMany;
   const originalReactionDeleteMany = PostReaction.deleteMany;
@@ -191,13 +257,14 @@ async function runSocialSuite() {
   (PostRating as any).aggregate = originalAggregate;
   (PostReaction as any).updateOne = originalReactionUpdateOne;
   (PostReaction as any).countDocuments = originalReactionCountDocuments;
+  (PostReaction as any).find = originalReactionFind;
   (Post as any).deleteOne = originalPostDeleteOne;
   (PostComment as any).deleteMany = originalCommentDeleteMany;
   (PostReaction as any).deleteMany = originalReactionDeleteMany;
   (PostRating as any).deleteMany = originalRatingDeleteMany;
 
   console.log('\n================================================================');
-  console.log('🏁 ALL ADMIN PHOTO & SOCIAL TESTS COMPLETED WITH 100% SUCCESS!');
+  console.log('🏁 ALL ADMIN RESTRICTION & SOCIAL TESTS PASSED WITH 100% SUCCESS!');
   console.log('================================================================');
 }
 

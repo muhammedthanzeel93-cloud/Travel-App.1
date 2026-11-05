@@ -161,8 +161,13 @@ export class SocialController {
 
   public static async toggleLikePost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = getActor(req)?.id;
+      const actor = getActor(req);
+      const userId = actor?.id;
       const postId = req.params.postId;
+      if (actor?.role === 'SUPER_ADMIN' || actor?.role === 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Admins have read-only access and cannot like posts.' });
+        return;
+      }
       if (!userId || !mongoose.isValidObjectId(postId)) {
         res.status(400).json({ success: false, message: 'Valid post and account are required.' });
         return;
@@ -236,9 +241,14 @@ export class SocialController {
 
   public static async addComment(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = getActor(req)?.id;
+      const actor = getActor(req);
+      const userId = actor?.id;
       const postId = req.params.postId;
       const text = req.body?.text;
+      if (actor?.role === 'SUPER_ADMIN' || actor?.role === 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Admins have read-only access and cannot comment on posts.' });
+        return;
+      }
       if (!userId || !mongoose.isValidObjectId(postId) || typeof text !== 'string' || !text.trim() || text.length > 2000) {
         res.status(400).json({ success: false, message: 'A valid post and comment up to 2000 characters are required.' });
         return;
@@ -476,8 +486,13 @@ export class SocialController {
 
   public static async toggleRepost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = getActor(req)?.id;
+      const actor = getActor(req);
+      const userId = actor?.id;
       const postId = req.params.postId;
+      if (actor?.role === 'SUPER_ADMIN' || actor?.role === 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Admins have read-only access and cannot repost.' });
+        return;
+      }
       if (!userId || !mongoose.isValidObjectId(postId)) {
         res.status(400).json({ success: false, message: 'Valid post and account are required.' });
         return;
@@ -513,9 +528,14 @@ export class SocialController {
 
   public static async ratePost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
-      const userId = getActor(req)?.id;
+      const actor = getActor(req);
+      const userId = actor?.id;
       const postId = req.params.postId;
       const rating = Number(req.body?.rating);
+      if (actor?.role === 'SUPER_ADMIN' || actor?.role === 'ADMIN') {
+        res.status(403).json({ success: false, message: 'Admins have read-only access and cannot rate posts.' });
+        return;
+      }
       if (!userId || !mongoose.isValidObjectId(postId) || !Number.isInteger(rating) || rating < 1 || rating > 5) {
         res.status(400).json({ success: false, message: 'A valid rating between 1 and 5 is required.' });
         return;
@@ -554,6 +574,64 @@ export class SocialController {
     }
   }
 
+  public static async getPostLikes(req: Request, res: Response): Promise<void> {
+    try {
+      const postId = req.params.postId;
+      if (!mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'A valid post ID is required.' });
+        return;
+      }
+      const reactions = await PostReaction.find({ postId, type: 'LIKE' })
+        .populate('userId', 'name username avatarUrl role email')
+        .sort({ createdAt: -1 })
+        .lean();
+      res.status(200).json({
+        success: true,
+        count: reactions.length,
+        users: reactions.map((r: any) => ({
+          id: r.userId?._id?.toString() || '',
+          name: r.userId?.name || r.userId?.username || 'Traveler',
+          username: r.userId?.username || 'traveler',
+          avatarUrl: r.userId?.avatarUrl || '',
+          role: r.userId?.role || 'USER',
+          email: r.userId?.email || '',
+          likedAt: r.createdAt
+        }))
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load post likes.' });
+    }
+  }
+
+  public static async getPostReposts(req: Request, res: Response): Promise<void> {
+    try {
+      const postId = req.params.postId;
+      if (!mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'A valid post ID is required.' });
+        return;
+      }
+      const reactions = await PostReaction.find({ postId, type: 'REPOST' })
+        .populate('userId', 'name username avatarUrl role email')
+        .sort({ createdAt: -1 })
+        .lean();
+      res.status(200).json({
+        success: true,
+        count: reactions.length,
+        users: reactions.map((r: any) => ({
+          id: r.userId?._id?.toString() || '',
+          name: r.userId?.name || r.userId?.username || 'Traveler',
+          username: r.userId?.username || 'traveler',
+          avatarUrl: r.userId?.avatarUrl || '',
+          role: r.userId?.role || 'USER',
+          email: r.userId?.email || '',
+          repostedAt: r.createdAt
+        }))
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load post reposts.' });
+    }
+  }
+
   public static async deletePost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const user = getActor(req);
@@ -568,7 +646,7 @@ export class SocialController {
         return;
       }
       const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
-      const isOwner = post.userId.toString() === user.id;
+      const isOwner = post.userId?.toString() === user.id;
       if (!isAdmin && !isOwner) {
         res.status(403).json({ success: false, message: 'You are not authorized to delete this post.' });
         return;

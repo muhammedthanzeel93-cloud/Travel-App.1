@@ -20,12 +20,14 @@ import {
   CheckCircle2,
   ArrowLeft,
   X,
-  Send,
   Building,
   User,
   Sparkles,
   Layers,
-  Filter
+  Filter,
+  Users,
+  Eye,
+  Info
 } from 'lucide-react';
 
 interface FeedUser {
@@ -45,12 +47,9 @@ interface SocialPost {
   locationName?: string;
   city?: string;
   likesCount: number;
-  isLiked: boolean;
   repostsCount: number;
-  isReposted: boolean;
   averageRating: number;
   ratingsCount: number;
-  userRating: number;
   isAdminPost: boolean;
   commentsCount: number;
   createdAt: string;
@@ -62,6 +61,17 @@ interface CommentItem {
   userAvatar?: string;
   text: string;
   createdAt?: string;
+}
+
+interface ReactionUser {
+  id: string;
+  name: string;
+  username: string;
+  avatarUrl?: string;
+  role?: string;
+  email?: string;
+  likedAt?: string;
+  repostedAt?: string;
 }
 
 export default function AdminPhotosPage() {
@@ -78,8 +88,6 @@ export default function AdminPhotosPage() {
   const [caption, setCaption] = useState('');
   const [locationName, setLocationName] = useState('');
   const [city, setCity] = useState('');
-  const [selectedRating, setSelectedRating] = useState<number>(5);
-  const [hoverRating, setHoverRating] = useState<number | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -91,11 +99,18 @@ export default function AdminPhotosPage() {
   const [deleteTargetPost, setDeleteTargetPost] = useState<SocialPost | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Active comments drawer/modal
-  const [activeCommentsPostId, setActiveCommentsPostId] = useState<string | null>(null);
+  // Read-only Modals: Likers, Reposters, Comments
+  const [activeLikesPost, setActiveLikesPost] = useState<SocialPost | null>(null);
+  const [likesList, setLikesList] = useState<ReactionUser[]>([]);
+  const [loadingLikes, setLoadingLikes] = useState(false);
+
+  const [activeRepostsPost, setActiveRepostsPost] = useState<SocialPost | null>(null);
+  const [repostsList, setRepostsList] = useState<ReactionUser[]>([]);
+  const [loadingReposts, setLoadingReposts] = useState(false);
+
+  const [activeCommentsPost, setActiveCommentsPost] = useState<SocialPost | null>(null);
   const [commentsList, setCommentsList] = useState<CommentItem[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [newCommentDraft, setNewCommentDraft] = useState('');
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -175,7 +190,7 @@ export default function AdminPhotosPage() {
     setUploadedImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Publish Post as Admin
+  // Publish Post as Admin (Unrated initially; rated exclusively by users)
   const handlePublishAdminPost = async (e: FormEvent) => {
     e.preventDefault();
     if (uploadedImages.length === 0) {
@@ -197,8 +212,7 @@ export default function AdminPhotosPage() {
           images: uploadedImages,
           caption: caption.trim(),
           locationName: locationName.trim(),
-          city: city.trim(),
-          initialRating: selectedRating
+          city: city.trim()
         })
       });
 
@@ -207,12 +221,11 @@ export default function AdminPhotosPage() {
         throw new Error(data.message || 'Failed to publish post.');
       }
 
-      showNotification('Admin photo post published successfully!', 'success');
+      showNotification('Admin photo post published! Travelers can now view, rate, like, and repost.', 'success');
       setUploadedImages([]);
       setCaption('');
       setLocationName('');
       setCity('');
-      setSelectedRating(5);
       await fetchAllPosts(false);
     } catch (err: any) {
       showNotification(err.message || 'Failed to publish post.', 'error');
@@ -221,99 +234,46 @@ export default function AdminPhotosPage() {
     }
   };
 
-  // Toggle Like
-  const handleToggleLike = async (post: SocialPost) => {
+  // Open Likers Modal
+  const handleOpenLikesModal = async (post: SocialPost) => {
+    setActiveLikesPost(post);
+    setLoadingLikes(true);
     try {
-      const desired = !post.isLiked;
-      const res = await fetch(`/api/social/posts/${post._id}/like`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ liked: desired })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        const updater = (list: SocialPost[]) =>
-          list.map((p) =>
-            p._id === post._id
-              ? { ...p, isLiked: data.isLiked, likesCount: data.newLikesCount }
-              : p
-          );
-        setAdminPosts(updater);
-        setUserPosts(updater);
+      const res = await fetch(`/api/social/posts/${post._id}/likes`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setLikesList(data.users || []);
       }
     } catch {
-      showNotification('Unable to update like.', 'error');
+      showNotification('Unable to load likes list.', 'error');
+    } finally {
+      setLoadingLikes(false);
     }
   };
 
-  // Toggle Repost
-  const handleToggleRepost = async (post: SocialPost) => {
+  // Open Reposters Modal
+  const handleOpenRepostsModal = async (post: SocialPost) => {
+    setActiveRepostsPost(post);
+    setLoadingReposts(true);
     try {
-      const desired = !post.isReposted;
-      const res = await fetch(`/api/social/posts/${post._id}/repost`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ reposted: desired })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showNotification(
-          desired ? 'Post reposted to travel feed!' : 'Post removed from reposts.',
-          'success'
-        );
-        const updater = (list: SocialPost[]) =>
-          list.map((p) =>
-            p._id === post._id
-              ? { ...p, isReposted: data.isReposted, repostsCount: data.newRepostsCount }
-              : p
-          );
-        setAdminPosts(updater);
-        setUserPosts(updater);
+      const res = await fetch(`/api/social/posts/${post._id}/reposts`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setRepostsList(data.users || []);
       }
     } catch {
-      showNotification('Unable to update repost status.', 'error');
+      showNotification('Unable to load reposts list.', 'error');
+    } finally {
+      setLoadingReposts(false);
     }
   };
 
-  // Rate Post
-  const handleRatePost = async (post: SocialPost, rating: number) => {
-    try {
-      const res = await fetch(`/api/social/posts/${post._id}/rate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ rating })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        showNotification(`Rated ${rating} ★ successfully!`, 'success');
-        const updater = (list: SocialPost[]) =>
-          list.map((p) =>
-            p._id === post._id
-              ? {
-                  ...p,
-                  userRating: data.userRating,
-                  averageRating: data.averageRating,
-                  ratingsCount: data.ratingsCount
-                }
-              : p
-          );
-        setAdminPosts(updater);
-        setUserPosts(updater);
-      }
-    } catch {
-      showNotification('Unable to submit rating.', 'error');
-    }
-  };
-
-  // Open Comments
-  const handleOpenComments = async (postId: string) => {
-    setActiveCommentsPostId(postId);
+  // Open Comments Modal (View Only)
+  const handleOpenCommentsModal = async (post: SocialPost) => {
+    setActiveCommentsPost(post);
     setLoadingComments(true);
     try {
-      const res = await fetch(`/api/social/posts/${postId}/comments`, { credentials: 'include' });
+      const res = await fetch(`/api/social/posts/${post._id}/comments`, { credentials: 'include' });
       if (res.ok) {
         const data = await res.json();
         setCommentsList(data.comments || []);
@@ -325,37 +285,7 @@ export default function AdminPhotosPage() {
     }
   };
 
-  // Submit Comment
-  const handleAddComment = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!activeCommentsPostId || !newCommentDraft.trim()) return;
-
-    try {
-      const res = await fetch(`/api/social/posts/${activeCommentsPostId}/comments`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ text: newCommentDraft.trim() })
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setNewCommentDraft('');
-        await handleOpenComments(activeCommentsPostId);
-        const updater = (list: SocialPost[]) =>
-          list.map((p) =>
-            p._id === activeCommentsPostId
-              ? { ...p, commentsCount: data.commentsCount ?? p.commentsCount + 1 }
-              : p
-          );
-        setAdminPosts(updater);
-        setUserPosts(updater);
-      }
-    } catch {
-      showNotification('Failed to post comment.', 'error');
-    }
-  };
-
-  // Confirm Delete Post
+  // Confirm Delete Post (Admin Moderation)
   const handleExecuteDelete = async () => {
     if (!deleteTargetPost) return;
     setIsDeleting(true);
@@ -423,7 +353,7 @@ export default function AdminPhotosPage() {
             </span>
           </div>
           <p className="text-xs sm:text-sm text-slate-400 mt-1">
-            Part 1: Admin Photo Studio to upload destination photos with location and ratings • Part 2: Community User Posts directory
+            Publish official destination photos and review community travelers&apos; posts with full view-only inspection for likes, reposts, comments, and star ratings.
           </p>
         </div>
 
@@ -476,7 +406,7 @@ export default function AdminPhotosPage() {
           }`}
         >
           <Camera className="w-4 h-4" />
-          <span>Part 1: Admin Photo Studio (Upload & Publish)</span>
+          <span>Part 1: Admin Photo Studio (Upload & Manage)</span>
           <span
             className={`px-2 py-0.5 rounded-full text-xs font-extrabold ${
               activeTab === 'admin_studio'
@@ -522,7 +452,7 @@ export default function AdminPhotosPage() {
               <div>
                 <h2 className="text-lg font-bold text-white">Create Official Admin Photo Post</h2>
                 <p className="text-xs text-slate-400">
-                  Upload destination photos, specify location tags, configure ratings, and allow user interactions.
+                  Upload destination photos with location tags. Posts will receive ratings, likes, comments, and reposts directly from community travelers.
                 </p>
               </div>
             </div>
@@ -629,7 +559,7 @@ export default function AdminPhotosPage() {
                 />
               </div>
 
-              {/* Location & Rating row */}
+              {/* Location & Traveler Rating row */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Location Name */}
                 <div className="space-y-1.5">
@@ -659,35 +589,20 @@ export default function AdminPhotosPage() {
                   />
                 </div>
 
-                {/* Initial Rating setting */}
+                {/* Star Rating Info (Read-only for Admins; rated exclusively by users) */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Star className="w-3.5 h-3.5 text-amber-400" /> Admin Destination Rating
+                    <Star className="w-3.5 h-3.5 text-amber-400" /> Community Traveler Rating
                   </label>
-                  <div className="flex items-center gap-1.5 h-10 px-3 bg-slate-950 border border-slate-800 rounded-xl">
-                    {[1, 2, 3, 4, 5].map((starVal) => {
-                      const isActive = (hoverRating ?? selectedRating) >= starVal;
-                      return (
-                        <button
-                          key={starVal}
-                          type="button"
-                          onMouseEnter={() => setHoverRating(starVal)}
-                          onMouseLeave={() => setHoverRating(null)}
-                          onClick={() => setSelectedRating(starVal)}
-                          className="p-1 hover:scale-125 transition-transform cursor-pointer"
-                        >
-                          <Star
-                            className={`w-4 h-4 ${
-                              isActive
-                                ? 'text-amber-400 fill-amber-400'
-                                : 'text-slate-600'
-                            }`}
-                          />
-                        </button>
-                      );
-                    })}
-                    <span className="text-xs font-bold text-amber-400 ml-2">
-                      {selectedRating}.0 ★
+                  <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl">
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <Star key={s} className="w-3.5 h-3.5 text-slate-700" />
+                      ))}
+                      <span className="text-xs font-semibold text-slate-400 ml-1.5">Unrated</span>
+                    </div>
+                    <span className="text-[10px] font-bold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                      User Rated Only
                     </span>
                   </div>
                 </div>
@@ -716,8 +631,8 @@ export default function AdminPhotosPage() {
                   {adminPosts.length}
                 </span>
               </h3>
-              <span className="text-xs text-slate-400">
-                Admins and travelers can rate, like, comment, and repost these
+              <span className="text-xs text-slate-400 flex items-center gap-1">
+                <Info className="w-3.5 h-3.5 text-amber-400" /> Click like, repost, or comments to view traveler activity
               </span>
             </div>
 
@@ -789,87 +704,71 @@ export default function AdminPhotosPage() {
                         </div>
                       )}
 
-                      {/* Caption & Star Rating */}
+                      {/* Caption & Star Rating Display (Read-only) */}
                       <div className="p-4 space-y-3">
                         <p className="text-xs sm:text-sm text-slate-200 line-clamp-3">
                           {post.caption}
                         </p>
 
-                        {/* Interactive Star Rating Selector */}
+                        {/* Read-Only Star Rating Display */}
                         <div className="flex items-center justify-between p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
                           <div className="flex items-center gap-1">
-                            <span className="text-xs font-semibold text-slate-400 mr-1.5">
-                              Rate:
-                            </span>
-                            {[1, 2, 3, 4, 5].map((starVal) => (
-                              <button
-                                key={starVal}
-                                type="button"
-                                onClick={() => void handleRatePost(post, starVal)}
-                                className="p-0.5 hover:scale-125 transition-transform cursor-pointer"
-                                title={`Give ${starVal} Stars`}
-                              >
+                            {[1, 2, 3, 4, 5].map((starVal) => {
+                              const isFilled = Math.round(post.averageRating) >= starVal;
+                              return (
                                 <Star
-                                  className={`w-4 h-4 ${
-                                    (post.userRating || Math.round(post.averageRating)) >= starVal
-                                      ? 'text-amber-400 fill-amber-400'
-                                      : 'text-slate-600'
+                                  key={starVal}
+                                  className={`w-3.5 h-3.5 ${
+                                    isFilled ? 'text-amber-400 fill-amber-400' : 'text-slate-700'
                                   }`}
                                 />
-                              </button>
-                            ))}
-                          </div>
-                          <div className="text-xs font-bold text-amber-400">
-                            ★ {post.averageRating > 0 ? post.averageRating.toFixed(1) : 'No ratings'}{' '}
-                            <span className="text-[11px] text-slate-500 font-normal">
-                              ({post.ratingsCount})
+                              );
+                            })}
+                            <span className="text-xs font-bold text-amber-400 ml-1.5">
+                              {post.averageRating > 0 ? `${post.averageRating.toFixed(1)} ★` : 'No ratings yet'}
                             </span>
                           </div>
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            {post.ratingsCount} {post.ratingsCount === 1 ? 'user rating' : 'user ratings'}
+                          </span>
                         </div>
                       </div>
                     </div>
 
-                    {/* Engagement Actions Bar */}
+                    {/* Engagement Actions Bar (Click to inspect likers, comments, reposters) */}
                     <div className="px-4 py-3 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        {/* Like */}
+                        {/* View Likes */}
                         <button
-                          onClick={() => void handleToggleLike(post)}
-                          className={`flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                            post.isLiked
-                              ? 'text-rose-500 font-bold'
-                              : 'text-slate-400 hover:text-white'
-                          }`}
+                          onClick={() => void handleOpenLikesModal(post)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-rose-400 transition-colors cursor-pointer group"
+                          title="Click to view travelers who liked this post"
                         >
-                          <Heart
-                            className={`w-4 h-4 ${
-                              post.isLiked ? 'fill-rose-500 text-rose-500' : ''
-                            }`}
-                          />
-                          <span>{post.likesCount}</span>
+                          <Heart className="w-4 h-4 text-rose-500/80 group-hover:text-rose-400" />
+                          <span className="text-white font-bold">{post.likesCount}</span>
+                          <span className="text-[11px] text-slate-500 group-hover:text-slate-300">Likes</span>
                         </button>
 
-                        {/* Comments */}
+                        {/* View Comments */}
                         <button
-                          onClick={() => void handleOpenComments(post._id)}
-                          className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-amber-400 transition-colors cursor-pointer"
+                          onClick={() => void handleOpenCommentsModal(post)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-amber-400 transition-colors cursor-pointer group"
+                          title="Click to view comments"
                         >
-                          <MessageCircle className="w-4 h-4" />
-                          <span>{post.commentsCount}</span>
+                          <MessageCircle className="w-4 h-4 text-amber-400/80 group-hover:text-amber-400" />
+                          <span className="text-white font-bold">{post.commentsCount}</span>
+                          <span className="text-[11px] text-slate-500 group-hover:text-slate-300">Comments</span>
                         </button>
 
-                        {/* Repost */}
+                        {/* View Reposts */}
                         <button
-                          onClick={() => void handleToggleRepost(post)}
-                          className={`flex items-center gap-1.5 text-xs font-semibold transition-colors cursor-pointer ${
-                            post.isReposted
-                              ? 'text-emerald-400 font-bold'
-                              : 'text-slate-400 hover:text-emerald-400'
-                          }`}
-                          title={post.isReposted ? 'Undo repost' : 'Repost'}
+                          onClick={() => void handleOpenRepostsModal(post)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-emerald-400 transition-colors cursor-pointer group"
+                          title="Click to view travelers who reposted this post"
                         >
-                          <Repeat className="w-4 h-4" />
-                          <span>{post.repostsCount}</span>
+                          <Repeat className="w-4 h-4 text-emerald-400/80 group-hover:text-emerald-400" />
+                          <span className="text-white font-bold">{post.repostsCount}</span>
+                          <span className="text-[11px] text-slate-500 group-hover:text-slate-300">Reposts</span>
                         </button>
                       </div>
 
@@ -997,14 +896,15 @@ export default function AdminPhotosPage() {
                     <div className="p-3.5 space-y-2.5">
                       <p className="text-xs text-slate-300 line-clamp-3">{post.caption}</p>
 
+                      {/* Read-only Star Rating for Community Posts */}
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
                         <div className="flex items-center gap-1 text-amber-400 font-bold">
                           <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
                           <span>
-                            {post.averageRating > 0 ? post.averageRating.toFixed(1) : 'Unrated'}
+                            {post.averageRating > 0 ? `${post.averageRating.toFixed(1)} ★` : 'Unrated'}
                           </span>
                           <span className="text-[10px] text-slate-500 font-normal">
-                            ({post.ratingsCount})
+                            ({post.ratingsCount} reviews)
                           </span>
                         </div>
                         <span className="text-[10px] text-slate-500">
@@ -1014,62 +914,43 @@ export default function AdminPhotosPage() {
                     </div>
                   </div>
 
-                  {/* Actions Bar */}
+                  {/* Actions Bar (Click to inspect likers, comments, reposters) */}
                   <div className="px-3.5 py-2.5 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center gap-3">
+                      {/* View Likes */}
                       <button
-                        onClick={() => void handleToggleLike(post)}
-                        className={`flex items-center gap-1 transition-colors cursor-pointer ${
-                          post.isLiked ? 'text-rose-500 font-bold' : 'hover:text-white'
-                        }`}
+                        onClick={() => void handleOpenLikesModal(post)}
+                        className="flex items-center gap-1 hover:text-rose-400 transition-colors cursor-pointer group"
+                        title="Click to view travelers who liked this post"
                       >
-                        <Heart
-                          className={`w-3.5 h-3.5 ${
-                            post.isLiked ? 'fill-rose-500 text-rose-500' : ''
-                          }`}
-                        />
-                        <span>{post.likesCount}</span>
+                        <Heart className="w-3.5 h-3.5 text-rose-500/80 group-hover:text-rose-400" />
+                        <span className="text-slate-300 font-semibold">{post.likesCount}</span>
                       </button>
 
+                      {/* View Comments */}
                       <button
-                        onClick={() => void handleOpenComments(post._id)}
-                        className="flex items-center gap-1 hover:text-amber-400 transition-colors cursor-pointer"
+                        onClick={() => void handleOpenCommentsModal(post)}
+                        className="flex items-center gap-1 hover:text-amber-400 transition-colors cursor-pointer group"
+                        title="Click to view comments"
                       >
-                        <MessageCircle className="w-3.5 h-3.5" />
-                        <span>{post.commentsCount}</span>
+                        <MessageCircle className="w-3.5 h-3.5 text-amber-400/80 group-hover:text-amber-400" />
+                        <span className="text-slate-300 font-semibold">{post.commentsCount}</span>
                       </button>
 
+                      {/* View Reposts */}
                       <button
-                        onClick={() => void handleToggleRepost(post)}
-                        className={`flex items-center gap-1 transition-colors cursor-pointer ${
-                          post.isReposted ? 'text-emerald-400 font-bold' : 'hover:text-emerald-400'
-                        }`}
+                        onClick={() => void handleOpenRepostsModal(post)}
+                        className="flex items-center gap-1 hover:text-emerald-400 transition-colors cursor-pointer group"
+                        title="Click to view travelers who reposted this post"
                       >
-                        <Repeat className="w-3.5 h-3.5" />
-                        <span>{post.repostsCount}</span>
+                        <Repeat className="w-3.5 h-3.5 text-emerald-400/80 group-hover:text-emerald-400" />
+                        <span className="text-slate-300 font-semibold">{post.repostsCount}</span>
                       </button>
                     </div>
 
-                    {/* Admin Rate */}
-                    <div className="flex items-center gap-0.5">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <button
-                          key={s}
-                          type="button"
-                          onClick={() => void handleRatePost(post, s)}
-                          className="p-0.5 hover:scale-125 transition-transform cursor-pointer"
-                          title={`Rate ${s} stars`}
-                        >
-                          <Star
-                            className={`w-3 h-3 ${
-                              (post.userRating || Math.round(post.averageRating)) >= s
-                                ? 'text-amber-400 fill-amber-400'
-                                : 'text-slate-700'
-                            }`}
-                          />
-                        </button>
-                      ))}
-                    </div>
+                    <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1">
+                      <Eye className="w-3 h-3 text-slate-400" /> View Only
+                    </span>
                   </div>
                 </div>
               ))}
@@ -1078,17 +959,175 @@ export default function AdminPhotosPage() {
         </div>
       )}
 
-      {/* COMMENTS MODAL / DRAWER */}
-      {activeCommentsPostId && (
+      {/* LIKERS MODAL (Who liked this post) */}
+      {activeLikesPost && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
+                  <Heart className="w-4 h-4 fill-rose-500" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Travelers Who Liked</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Total {likesList.length} {likesList.length === 1 ? 'traveler' : 'travelers'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveLikesPost(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {loadingLikes ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto text-amber-400 mb-2" />
+                  Loading likes…
+                </div>
+              ) : likesList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs">
+                  No travelers have liked this post yet.
+                </div>
+              ) : (
+                likesList.map((u, i) => (
+                  <div
+                    key={`${u.id}-${i}`}
+                    className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      {u.avatarUrl ? (
+                        <img
+                          src={u.avatarUrl}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover border border-slate-700"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-xs">
+                          {u.name?.[0] || 'T'}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          {u.name}
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            {u.role || 'USER'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">@{u.username}</div>
+                      </div>
+                    </div>
+                    {u.likedAt && (
+                      <span className="text-[10px] text-slate-500 whitespace-nowrap">
+                        {new Date(u.likedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REPOSTERS MODAL (Who reposted this post) */}
+      {activeRepostsPost && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
+                  <Repeat className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Travelers Who Reposted</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Total {repostsList.length} {repostsList.length === 1 ? 'repost' : 'reposts'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveRepostsPost(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {loadingReposts ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto text-emerald-400 mb-2" />
+                  Loading reposts…
+                </div>
+              ) : repostsList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs">
+                  No travelers have reposted this post yet.
+                </div>
+              ) : (
+                repostsList.map((u, i) => (
+                  <div
+                    key={`${u.id}-${i}`}
+                    className="p-3 bg-slate-950/70 border border-slate-800/80 rounded-xl flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3">
+                      {u.avatarUrl ? (
+                        <img
+                          src={u.avatarUrl}
+                          alt=""
+                          className="w-8 h-8 rounded-full object-cover border border-slate-700"
+                        />
+                      ) : (
+                        <div className="w-8 h-8 rounded-full bg-slate-800 flex items-center justify-center text-emerald-400 font-bold text-xs">
+                          {u.name?.[0] || 'T'}
+                        </div>
+                      )}
+                      <div>
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          {u.name}
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                            {u.role || 'USER'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400">@{u.username}</div>
+                      </div>
+                    </div>
+                    {u.repostedAt && (
+                      <span className="text-[10px] text-slate-500 whitespace-nowrap">
+                        {new Date(u.repostedAt).toLocaleDateString()}
+                      </span>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* COMMENTS MODAL / DRAWER (View-Only for Admins) */}
+      {activeCommentsPost && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-              <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                <MessageCircle className="w-4 h-4 text-amber-400" /> Comments & Discussion
-              </h3>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <MessageCircle className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Traveler Comments & Discussions</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Total {commentsList.length} {commentsList.length === 1 ? 'comment' : 'comments'}
+                  </p>
+                </div>
+              </div>
               <button
-                onClick={() => setActiveCommentsPostId(null)}
-                className="p-1 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                onClick={() => setActiveCommentsPost(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -1102,7 +1141,7 @@ export default function AdminPhotosPage() {
                 </div>
               ) : commentsList.length === 0 ? (
                 <div className="p-8 text-center text-slate-500 text-xs">
-                  No comments yet. Start the conversation below!
+                  No comments published on this post yet.
                 </div>
               ) : (
                 commentsList.map((c) => (
@@ -1127,28 +1166,16 @@ export default function AdminPhotosPage() {
               )}
             </div>
 
-            <form onSubmit={handleAddComment} className="p-3 bg-slate-950 border-t border-slate-800 flex gap-2">
-              <input
-                type="text"
-                value={newCommentDraft}
-                onChange={(e) => setNewCommentDraft(e.target.value)}
-                placeholder="Write a comment as admin..."
-                maxLength={2000}
-                className="flex-1 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-              />
-              <button
-                type="submit"
-                disabled={!newCommentDraft.trim()}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-slate-950 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-              >
-                <Send className="w-3.5 h-3.5" /> Send
-              </button>
-            </form>
+            {/* Read-Only Notice for Admins (No comment submission) */}
+            <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-400">
+              <Info className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Admins have read-only access. Comments are submitted by community travelers.</span>
+            </div>
           </div>
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL (Admin Moderation) */}
       {deleteTargetPost && (
         <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
           <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
