@@ -118,12 +118,19 @@ async function runTests() {
   {
     Object.defineProperty(mongoose.connection, 'readyState', { value: 1, configurable: true });
 
-    // Mock User.countDocuments
-    const origCountDocuments = User.countDocuments;
+    // Mock User.find
+    const origFind = User.find;
     let capturedFilter: any = null;
-    (User as any).countDocuments = async (filter: any) => {
+    (User as any).find = (filter: any) => {
       capturedFilter = filter;
-      return 5;
+      return {
+        select: () => ({
+          lean: async () => [
+            { _id: new mongoose.Types.ObjectId(), username: 'user1', name: 'User 1', email: 'user1@example.com', role: 'USER', lastActiveAt: new Date() },
+            { _id: new mongoose.Types.ObjectId(), username: 'traveler1', name: 'Traveler 1', email: 'traveler1@example.com', role: 'TRAVELER', lastActiveAt: new Date() }
+          ]
+        })
+      };
     };
 
     const { res, result } = createMockResponse();
@@ -131,15 +138,16 @@ async function runTests() {
 
     assert.equal(result.statusCode, 200);
     assert.equal(result.body.success, true);
-    assert.equal(result.body.activeUserCount, 5);
+    assert.equal(result.body.activeUserCount, 2);
+    assert.deepEqual(result.body.activeEmails, ['user1@example.com', 'traveler1@example.com'], 'Must extract active emails list');
     assert.deepEqual(capturedFilter.role, { $nin: ['ADMIN', 'SUPER_ADMIN'] }, 'Must filter out ADMIN and SUPER_ADMIN');
     assert.equal(capturedFilter.status, 'ACTIVE', 'Must require status ACTIVE');
     assert.ok(capturedFilter.lastActiveAt.$gte instanceof Date, 'Must filter by lastActiveAt threshold');
 
-    console.log('✅ [PASS] getActiveUserCount returns accurate count and enforces admin exclusion filter');
+    console.log('✅ [PASS] getActiveUserCount returns accurate count, emails list, and enforces admin exclusion filter');
 
-    // Restore countDocuments
-    User.countDocuments = origCountDocuments;
+    // Restore find
+    User.find = origFind;
   }
 
   console.log('\n================================================================');

@@ -56,14 +56,15 @@ export default function AdminUsersPage() {
   const [actionSuccessMessage, setActionSuccessMessage] = useState<string | null>(null);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentTime, setCurrentTime] = useState<number>(Date.now());
 
   const playAlertSound = (type: 'success' | 'warning' = 'success') => {
     playChime(type, soundEnabled);
   };
 
   // Fetch users from database API
-  const fetchUsers = async () => {
-    setLoading(true);
+  const fetchUsers = async (showSpinner = true) => {
+    if (showSpinner) setLoading(true);
     try {
       const res = await fetch('/api/auth/users', { credentials: 'include' });
       if (res.ok) {
@@ -75,12 +76,18 @@ export default function AdminUsersPage() {
     } catch (err: any) {
       console.error('Failed to load users:', err);
     } finally {
-      setLoading(false);
+      if (showSpinner) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchUsers();
+    void fetchUsers();
+    // Auto-refresh user presence every 15 seconds to keep active user count live
+    const interval = setInterval(() => {
+      void fetchUsers(false);
+      setCurrentTime(Date.now());
+    }, 15_000);
+    return () => clearInterval(interval);
   }, []);
 
   // Copy text to clipboard
@@ -168,6 +175,16 @@ export default function AdminUsersPage() {
     }
   };
 
+  const now = currentTime;
+  const isUserOnline = (u: UserRecord) => {
+    if (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN' || u.status === 'BLOCKED' || !u.lastActiveAt) return false;
+    return (now - new Date(u.lastActiveAt).getTime()) <= 5 * 60 * 1000;
+  };
+
+  const activeTravelersList = users.filter(isUserOnline);
+  const onlineTravelersCount = activeTravelersList.length;
+  const activeEmailsList = activeTravelersList.map((u) => u.email).filter(Boolean);
+
   // Filtered users across all roles and statuses
   const filteredUsers = users.filter((u) => {
     const matchesSearch =
@@ -185,8 +202,8 @@ export default function AdminUsersPage() {
     if (roleFilter === 'HOTEL' && !(u.role === 'HOTEL_HOST' || u.role === 'HOTEL')) return false;
     if (roleFilter === 'TRAVELER' && u.role !== 'TRAVELER') return false;
 
-    // Status filtering
-    if (statusFilter === 'ACTIVE' && u.status === 'BLOCKED') return false;
+    // Status filtering: When ACTIVE is clicked, whitelist only users currently active online
+    if (statusFilter === 'ACTIVE' && !isUserOnline(u)) return false;
     if (statusFilter === 'BLOCKED' && u.status !== 'BLOCKED') return false;
 
     return true;
@@ -198,11 +215,6 @@ export default function AdminUsersPage() {
   const travelerCount = users.filter((u) => u.role === 'TRAVELER').length;
   const activeCount = users.filter((u) => u.status !== 'BLOCKED').length;
   const blockedCount = users.filter((u) => u.status === 'BLOCKED').length;
-  const now = Date.now();
-  const onlineTravelersCount = users.filter((u) => {
-    if (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN' || u.status === 'BLOCKED' || !u.lastActiveAt) return false;
-    return (now - new Date(u.lastActiveAt).getTime()) <= 5 * 60 * 1000;
-  }).length;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -281,7 +293,7 @@ export default function AdminUsersPage() {
           <div className="mt-3">
             <span className="text-2xl sm:text-3xl font-black text-white block">{users.length}</span>
             <span className="text-[11px] font-semibold text-amber-400 mt-1 block">
-              {activeCount} Active • {blockedCount} Blocked • {onlineTravelersCount} Online Now
+              {onlineTravelersCount} Active Online • {users.length} Total Accounts • {blockedCount} Blocked
             </span>
           </div>
         </div>
@@ -431,13 +443,14 @@ export default function AdminUsersPage() {
             </button>
             <button
               onClick={() => setStatusFilter('ACTIVE')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                 statusFilter === 'ACTIVE'
                   ? 'bg-emerald-500 text-slate-950 shadow-sm'
                   : 'bg-slate-950 text-slate-400 hover:text-white border border-slate-800'
               }`}
             >
-              Active ({activeCount})
+              <span className={`w-2 h-2 rounded-full ${onlineTravelersCount > 0 ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+              <span>Active ({onlineTravelersCount})</span>
             </button>
             <button
               onClick={() => setStatusFilter('BLOCKED')}
@@ -521,11 +534,104 @@ export default function AdminUsersPage() {
       <div className="bg-[#0b0f19] border border-slate-800/80 rounded-2xl overflow-hidden shadow-xl">
         <div className="p-4 sm:p-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Users className="w-4 h-4 text-amber-400" />
-            <h2 className="text-sm font-bold text-white">Database User Accounts ({filteredUsers.length})</h2>
+            {statusFilter === 'ACTIVE' ? (
+              <>
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse" />
+                <h2 className="text-sm font-bold text-emerald-400">
+                  Active Online Users ({filteredUsers.length})
+                </h2>
+              </>
+            ) : (
+              <>
+                <Users className="w-4 h-4 text-amber-400" />
+                <h2 className="text-sm font-bold text-white">Database User Accounts ({filteredUsers.length})</h2>
+              </>
+            )}
           </div>
-          <span className="text-[11px] text-slate-400 font-mono">Live MongoDB Records</span>
+          <span className="text-[11px] text-slate-400 font-mono">
+            {statusFilter === 'ACTIVE' ? 'Active Presence Verified' : 'Live MongoDB Records'}
+          </span>
         </div>
+
+        {/* Dedicated Active Users Email Directory Panel */}
+        {statusFilter === 'ACTIVE' && (
+          <div className="p-4 bg-emerald-950/25 border-b border-emerald-900/40 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-2.5 border-b border-emerald-800/30">
+              <div>
+                <span className="text-xs font-black text-white flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Active Users Email Directory ({activeEmailsList.length} Emails)</span>
+                </span>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  Real-time list of registered platform users currently browsing this website (admins excluded)
+                </p>
+              </div>
+              {activeEmailsList.length > 0 && (
+                <button
+                  onClick={() => handleCopy(activeEmailsList.join(', '), 'all_active_emails')}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all cursor-pointer self-start sm:self-auto shrink-0"
+                >
+                  {copiedId === 'all_active_emails' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Copied {activeEmailsList.length} Emails!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Copy All Active Emails</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {activeTravelersList.length === 0 ? (
+              <div className="py-2 text-slate-400 text-xs italic">
+                No registered users currently active online on the platform.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                {activeTravelersList.map((u) => (
+                  <div
+                    key={`active-chip-${u.id}`}
+                    className="p-2.5 rounded-xl bg-slate-900/90 border border-emerald-500/30 flex items-center justify-between gap-2 shadow-sm"
+                  >
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shrink-0" />
+                      <div className="overflow-hidden">
+                        <span className="font-bold text-white text-xs block truncate">
+                          {u.name || u.username}
+                        </span>
+                        {u.email ? (
+                          <span className="text-[11px] text-emerald-400 font-mono block truncate">
+                            {u.email}
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-slate-500 italic block">No email</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {u.email && (
+                      <button
+                        onClick={() => handleCopy(u.email, `chip_email_${u.id}`)}
+                        title="Copy email ID"
+                        className="p-1.5 rounded-lg bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors shrink-0 cursor-pointer"
+                      >
+                        {copiedId === `chip_email_${u.id}` ? (
+                          <Check className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <Copy className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="p-12 text-center text-slate-400 text-xs">

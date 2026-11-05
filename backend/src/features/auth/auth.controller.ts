@@ -277,14 +277,24 @@ export class AuthController {
     if (!requireDatabase(res)) return;
     try {
       const threshold = new Date(Date.now() - ACTIVE_PRESENCE_WINDOW_MS);
-      const activeUserCount = await User.countDocuments({
+      const activeUsers = await User.find({
         role: { $nin: ['ADMIN', 'SUPER_ADMIN'] },
         status: 'ACTIVE',
         lastActiveAt: { $gte: threshold }
-      });
+      }).select('username name email role lastActiveAt').lean();
+
       res.status(200).json({
         success: true,
-        activeUserCount,
+        activeUserCount: activeUsers.length,
+        activeUsers: activeUsers.map((u: any) => ({
+          id: u._id.toString(),
+          username: u.username,
+          name: u.name,
+          email: u.email || '',
+          role: u.role,
+          lastActiveAt: u.lastActiveAt
+        })),
+        activeEmails: activeUsers.map((u: any) => u.email).filter(Boolean),
         windowSeconds: ACTIVE_PRESENCE_WINDOW_MS / 1000
       });
     } catch {
@@ -305,11 +315,18 @@ export class AuthController {
         })
       ]);
       const registeredTravelersCount = users.filter((u: any) => u.role !== 'SUPER_ADMIN' && u.role !== 'ADMIN').length;
+      const activeUsersList = users.filter((u: any) => {
+        if (u.role === 'SUPER_ADMIN' || u.role === 'ADMIN' || u.status === 'BLOCKED' || !u.lastActiveAt) return false;
+        return new Date(u.lastActiveAt) >= threshold;
+      });
+      const activeEmails = activeUsersList.map((u: any) => u.email).filter(Boolean);
+
       res.status(200).json({
         success: true,
         count: users.length,
         registeredTravelersCount,
         activeUserCount,
+        activeEmails,
         users: users.map((user: any) => ({
           id: user._id.toString(), username: user.username, name: user.name, email: user.email || '', phone: user.phone || '',
           role: user.role || 'USER', status: user.status || 'ACTIVE', avatarUrl: user.avatarUrl, bio: user.bio || '',
