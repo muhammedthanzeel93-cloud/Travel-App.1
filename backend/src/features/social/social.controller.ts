@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware.js';
 import { User } from '../auth/user.model.js';
-import { DirectMessage, Post, PostComment, PostReaction, Reel, Story, StoryResponse } from './social.model.js';
+import { DirectMessage, Post, PostComment, PostRating, PostReaction, Reel, Story, StoryResponse } from './social.model.js';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 30;
@@ -31,7 +31,9 @@ function decodeCursor(value: unknown): { date: Date; id: mongoose.Types.ObjectId
 }
 
 const mediaUrlIsValid = (value: unknown): value is string => {
-  if (typeof value !== 'string' || value.length > 2048) return false;
+  if (typeof value !== 'string') return false;
+  if (value.startsWith('data:image/')) return value.length < 8_000_000;
+  if (value.length > 2048) return false;
   try {
     const url = new URL(value);
     return url.protocol === 'https:' || url.protocol === 'http:';
@@ -45,39 +47,77 @@ export class SocialController {
     try {
       const limit = pageSizeFrom(req.query.limit);
       const cursor = req.query.cursor ? decodeCursor(req.query.cursor) : null;
+      const type = typeof req.query.type === 'string' ? req.query.type.toLowerCase() : 'all';
       if (req.query.cursor && !cursor) {
         res.status(400).json({ success: false, message: 'Invalid feed cursor.' });
         return;
       }
       const filter: any = {};
+      if (type === 'admin') {
+        filter.isAdminPost = true;
+      } else if (type === 'users' || type === 'user') {
+        filter.isAdminPost = { $ne: true };
+      }
       if (cursor) filter.$or = [
         { createdAt: { $lt: cursor.date } },
         { createdAt: cursor.date, _id: { $lt: cursor.id } }
       ];
       const queried = await Post.find(filter)
-        .select('userId images caption locationName commentsCount createdAt')
-        .populate('userId', 'name username avatarUrl isVerified')
+        .select('userId images caption locationName city commentsCount likesCount repostsCount ratingSum ratingsCount averageRating isAdminPost createdAt')
+        .populate('userId', 'name username avatarUrl role isVerified')
         .sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
       const hasMore = queried.length > limit;
       const posts = queried.slice(0, limit);
       const postIds = posts.map((post: any) => post._id);
-      const [reactionCounts, likedIds] = await Promise.all([
+
+      const [reactionCounts, repostCounts, userReactions, userRatings] = await Promise.all([
         PostReaction.aggregate([{ $match: { postId: { $in: postIds }, type: 'LIKE' } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
-        req.user ? PostReaction.find({ postId: { $in: postIds }, userId: req.user.id, type: 'LIKE' }).select('postId').lean() : Promise.resolve([])
+        PostReaction.aggregate([{ $match: { postId: { $in: postIds }, type: 'REPOST' } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
+        req.user ? PostReaction.find({ postId: { $in: postIds }, userId: req.user.id }).select('postId type').lean() : Promise.resolve([]),
+        req.user ? PostRating.find({ postId: { $in: postIds }, userId: req.user.id }).select('postId rating').lean() : Promise.resolve([])
       ]);
-      const counts = new Map(reactionCounts.map((item: any) => [item._id.toString(), item.count]));
-      const liked = new Set(likedIds.map((item: any) => item.postId.toString()));
+
+      const likeCountMap = new Map(reactionCounts.map((item: any) => [item._id.toString(), item.count]));
+      const repostCountMap = new Map(repostCounts.map((item: any) => [item._id.toString(), item.count]));
+      const likedSet = new Set(userReactions.filter((r: any) => r.type === 'LIKE').map((item: any) => item.postId.toString()));
+      const repostedSet = new Set(userReactions.filter((r: any) => r.type === 'REPOST').map((item: any) => item.postId.toString()));
+      const ratingMap = new Map(userRatings.map((item: any) => [item.postId.toString(), item.rating]));
+
       const lastPost: any = posts[posts.length - 1];
-      res.status(200).json({ success: true, count: posts.length, nextCursor: hasMore && lastPost ? encodeCursor(lastPost.createdAt, lastPost._id) : null, posts: posts.map((post: any) => ({
-        _id: post._id.toString(),
-        user: {
-          name: post.userId?.name || post.userId?.username || 'Community Explorer',
-          avatar: post.userId?.avatarUrl || '', handle: '@' + (post.userId?.username || 'traveler')
-        },
-        images: post.images || [], caption: post.caption || '', locationName: post.locationName || '',
-        likesCount: counts.get(post._id.toString()) || 0, isLiked: liked.has(post._id.toString()),
-        commentsCount: post.commentsCount || 0, comments: [], createdAt: post.createdAt
-      })) });
+      res.status(200).json({
+        success: true,
+        count: posts.length,
+        nextCursor: hasMore && lastPost ? encodeCursor(lastPost.createdAt, lastPost._id) : null,
+        posts: posts.map((post: any) => {
+          const pid = post._id.toString();
+          return {
+            _id: pid,
+            user: {
+              id: post.userId?._id?.toString() || '',
+              name: post.userId?.name || post.userId?.username || (post.isAdminPost ? 'Admin Operations Desk' : 'Community Explorer'),
+              avatar: post.userId?.avatarUrl || '',
+              handle: '@' + (post.userId?.username || 'traveler'),
+              role: post.userId?.role || (post.isAdminPost ? 'SUPER_ADMIN' : 'USER'),
+              isVerified: Boolean(post.userId?.isVerified)
+            },
+            images: post.images || [],
+            caption: post.caption || '',
+            locationName: post.locationName || '',
+            city: post.city || '',
+            likesCount: likeCountMap.get(pid) ?? (post.likesCount || 0),
+            isLiked: likedSet.has(pid),
+            repostsCount: repostCountMap.get(pid) ?? (post.repostsCount || 0),
+            isReposted: repostedSet.has(pid),
+            averageRating: post.averageRating || 0,
+            ratingsCount: post.ratingsCount || 0,
+            userRating: ratingMap.get(pid) || 0,
+            isAdminPost: Boolean(post.isAdminPost),
+            commentsCount: post.commentsCount || 0,
+            comments: [],
+            createdAt: post.createdAt
+          };
+        })
+      });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to load the travel feed.' });
     }
@@ -86,17 +126,34 @@ export class SocialController {
   public static async createPost(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const user = getActor(req);
-      const { images, caption, locationName = '', city = '' } = req.body || {};
+      const { images, caption, locationName = '', city = '', initialRating } = req.body || {};
       if (!user || !Array.isArray(images) || images.length < 1 || images.length > 10 || !images.every(mediaUrlIsValid) || typeof caption !== 'string' || !caption.trim() || caption.length > 5000) {
-        res.status(400).json({ success: false, message: 'Provide one to ten valid image URLs and a caption up to 5000 characters.' });
+        res.status(400).json({ success: false, message: 'Provide one to ten valid image URLs/uploads and a caption up to 5000 characters.' });
         return;
       }
+      const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+      const cleanLocation = typeof locationName === 'string' ? locationName.trim().slice(0, 160) : '';
+      const cleanCity = typeof city === 'string' ? city.trim().slice(0, 120) : '';
+
       const post = await Post.create({
-        userId: user.id, images, caption: caption.trim(),
-        locationName: typeof locationName === 'string' ? locationName.trim().slice(0, 160) : '',
-        city: typeof city === 'string' ? city.trim().slice(0, 120) : ''
+        userId: user.id,
+        images,
+        caption: caption.trim(),
+        locationName: cleanLocation,
+        city: cleanCity,
+        isAdminPost: isAdmin
       });
-      res.status(201).json({ success: true, postId: post._id.toString() });
+
+      if (typeof initialRating === 'number' && initialRating >= 1 && initialRating <= 5) {
+        const rounded = Math.round(initialRating);
+        await PostRating.create({ postId: post._id, userId: user.id, rating: rounded });
+        post.ratingSum = rounded;
+        post.ratingsCount = 1;
+        post.averageRating = rounded;
+        await post.save();
+      }
+
+      res.status(201).json({ success: true, postId: post._id.toString(), post });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to create post.' });
     }
@@ -414,6 +471,117 @@ export class SocialController {
       res.status(201).json({ success: true, messageId: message._id.toString() });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to send message.' });
+    }
+  }
+
+  public static async toggleRepost(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      const postId = req.params.postId;
+      if (!userId || !mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'Valid post and account are required.' });
+        return;
+      }
+      const reposted = req.body?.reposted;
+      if (typeof reposted !== 'boolean') {
+        res.status(400).json({ success: false, message: 'A reposted boolean is required.' });
+        return;
+      }
+      const post = await Post.findById(postId);
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      const filter = { postId: new mongoose.Types.ObjectId(postId), userId: new mongoose.Types.ObjectId(userId), type: 'REPOST' as const };
+      if (reposted) {
+        try {
+          await PostReaction.updateOne(filter, { $setOnInsert: filter }, { upsert: true });
+        } catch (error: any) {
+          if (error?.code !== 11000) throw error;
+        }
+      } else {
+        await PostReaction.deleteOne(filter);
+      }
+      const newRepostsCount = await PostReaction.countDocuments({ postId, type: 'REPOST' });
+      post.repostsCount = newRepostsCount;
+      await post.save();
+      res.status(200).json({ success: true, postId, isReposted: reposted, newRepostsCount });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to update repost.' });
+    }
+  }
+
+  public static async ratePost(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const userId = getActor(req)?.id;
+      const postId = req.params.postId;
+      const rating = Number(req.body?.rating);
+      if (!userId || !mongoose.isValidObjectId(postId) || !Number.isInteger(rating) || rating < 1 || rating > 5) {
+        res.status(400).json({ success: false, message: 'A valid rating between 1 and 5 is required.' });
+        return;
+      }
+      const post = await Post.findById(postId);
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      await PostRating.findOneAndUpdate(
+        { postId: new mongoose.Types.ObjectId(postId), userId: new mongoose.Types.ObjectId(userId) },
+        { rating },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+      const stats = await PostRating.aggregate([
+        { $match: { postId: new mongoose.Types.ObjectId(postId) } },
+        { $group: { _id: null, sum: { $sum: '$rating' }, count: { $sum: 1 } } }
+      ]);
+      const sum = stats[0]?.sum || 0;
+      const count = stats[0]?.count || 0;
+      const avg = count > 0 ? Math.round((sum / count) * 10) / 10 : 0;
+      post.ratingSum = sum;
+      post.ratingsCount = count;
+      post.averageRating = avg;
+      await post.save();
+
+      res.status(200).json({
+        success: true,
+        postId,
+        userRating: rating,
+        averageRating: avg,
+        ratingsCount: count
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to record rating.' });
+    }
+  }
+
+  public static async deletePost(req: AuthenticatedRequest, res: Response): Promise<void> {
+    try {
+      const user = getActor(req);
+      const postId = req.params.postId;
+      if (!user || !mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'Valid post ID and account are required.' });
+        return;
+      }
+      const post = await Post.findById(postId);
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      const isAdmin = user.role === 'SUPER_ADMIN' || user.role === 'ADMIN';
+      const isOwner = post.userId.toString() === user.id;
+      if (!isAdmin && !isOwner) {
+        res.status(403).json({ success: false, message: 'You are not authorized to delete this post.' });
+        return;
+      }
+      await Promise.all([
+        Post.deleteOne({ _id: postId }),
+        PostComment.deleteMany({ postId }),
+        PostReaction.deleteMany({ postId }),
+        PostRating.deleteMany({ postId })
+      ]);
+      res.status(200).json({ success: true, message: 'Post deleted successfully.', postId });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to delete post.' });
     }
   }
 }

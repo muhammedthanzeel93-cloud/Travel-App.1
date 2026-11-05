@@ -73,9 +73,9 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
     },
     {
       name: 'Post Photos',
-      href: '/feed',
+      href: '/admin/operations/photos',
       icon: Camera,
-      active: pathname === '/feed'
+      active: pathname === '/admin/operations/photos'
     },
     {
       name: 'User',

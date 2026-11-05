@@ -7,6 +7,20 @@ export interface IPost extends Document {
   locationName: string;
   city: string;
   commentsCount: number;
+  likesCount: number;
+  repostsCount: number;
+  ratingSum: number;
+  ratingsCount: number;
+  averageRating: number;
+  isAdminPost: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IPostRating extends Document {
+  postId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  rating: number; // 1 to 5
   createdAt: Date;
   updatedAt: Date;
 }
@@ -20,7 +34,7 @@ export interface IPostComment extends Document {
   createdAt: Date;
 }
 
-export type PostReactionType = 'LIKE' | 'SAVE';
+export type PostReactionType = 'LIKE' | 'SAVE' | 'REPOST';
 
 export interface IPostReaction extends Document {
   postId: mongoose.Types.ObjectId;
@@ -99,7 +113,13 @@ const PostSchema = new Schema<IPost>(
     caption: { type: String, required: true },
     locationName: { type: String, default: '' },
     city: { type: String, default: '' },
-    commentsCount: { type: Number, default: 0 }
+    commentsCount: { type: Number, default: 0 },
+    likesCount: { type: Number, default: 0 },
+    repostsCount: { type: Number, default: 0 },
+    ratingSum: { type: Number, default: 0 },
+    ratingsCount: { type: Number, default: 0 },
+    averageRating: { type: Number, default: 0 },
+    isAdminPost: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
@@ -167,6 +187,7 @@ const DirectMessageSchema = new Schema<IDirectMessage>(
 );
 
 PostSchema.index({ createdAt: -1, _id: -1 });
+PostSchema.index({ isAdminPost: 1, createdAt: -1 });
 ReelSchema.index({ createdAt: -1 });
 StorySchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
@@ -183,12 +204,20 @@ PostCommentSchema.index({ postId: 1, createdAt: -1, _id: -1 });
 const PostReactionSchema = new Schema<IPostReaction>({
   postId: { type: Schema.Types.ObjectId, ref: 'Post', required: true },
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
-  type: { type: String, enum: ['LIKE', 'SAVE'], required: true },
+  type: { type: String, enum: ['LIKE', 'SAVE', 'REPOST'], required: true },
   createdAt: { type: Date, default: Date.now }
 }, { versionKey: false });
 PostReactionSchema.index({ postId: 1, userId: 1, type: 1 }, { unique: true });
 PostReactionSchema.index({ postId: 1, type: 1 });
 PostReactionSchema.index({ userId: 1, type: 1, createdAt: -1 });
+
+const PostRatingSchema = new Schema<IPostRating>({
+  postId: { type: Schema.Types.ObjectId, ref: 'Post', required: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  rating: { type: Number, required: true, min: 1, max: 5 }
+}, { timestamps: true, versionKey: false });
+PostRatingSchema.index({ postId: 1, userId: 1 }, { unique: true });
+PostRatingSchema.index({ postId: 1, rating: 1 });
 
 const StoryResponseSchema = new Schema<IStoryResponse>({
   storyId: { type: Schema.Types.ObjectId, ref: 'Story', required: true },
@@ -210,6 +239,7 @@ DirectMessageSchema.index({ recipientId: 1, createdAt: -1 });
 export const Post = mongoose.model<IPost>('Post', PostSchema);
 export const PostComment = mongoose.model<IPostComment>('PostComment', PostCommentSchema);
 export const PostReaction = mongoose.model<IPostReaction>('PostReaction', PostReactionSchema);
+export const PostRating = mongoose.model<IPostRating>('PostRating', PostRatingSchema);
 export const StoryResponse = mongoose.model<IStoryResponse>('StoryResponse', StoryResponseSchema);
 export const Reel = mongoose.model<IReel>('Reel', ReelSchema);
 export const Story = mongoose.model<IStory>('Story', StorySchema);

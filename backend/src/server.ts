@@ -95,7 +95,8 @@ const authTargetLimiter = rateLimit({
 
 // Middlewares
 app.use(cors({ origin: config.corsOrigin.split(',').map((origin) => origin.trim()), credentials: true }));
-app.use(express.json({ limit: '20kb' })); // Restrict JSON body size to prevent memory exhaustion
+app.use(express.json({ limit: '10mb' })); // Support photo upload payloads
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 for (const path of [
   '/api/v1/auth/login', '/api/v1/auth/send-otp', '/api/v1/auth/verify-otp',
@@ -164,6 +165,7 @@ async function bootstrap() {
     await Promise.all([
       mongoose.model('PostComment').init(),
       mongoose.model('PostReaction').init(),
+      mongoose.model('PostRating').init(),
       mongoose.model('StoryResponse').init()
     ]);
     console.log('[DATABASE] Connected to configured MongoDB instance.');
