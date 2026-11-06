@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import { AuthenticatedRequest } from '../../middlewares/auth.middleware.js';
 import { User } from '../auth/user.model.js';
-import { DirectMessage, Post, PostComment, PostRating, PostReaction, Reel, Story, StoryResponse } from './social.model.js';
+import { DirectMessage, Post, PostComment, PostRating, PostReaction, PostView, Reel, Story, StoryResponse } from './social.model.js';
 
 const DEFAULT_PAGE_SIZE = 20;
 const MAX_PAGE_SIZE = 30;
@@ -70,20 +70,43 @@ export class SocialController {
       const posts = queried.slice(0, limit);
       const postIds = posts.map((post: any) => post._id);
 
-      // Increment view counts for displayed posts when browsed on traveler feed
-      if (type !== 'admin' && postIds.length > 0) {
-        Post.updateMany({ _id: { $in: postIds } }, { $inc: { viewsCount: 1 } }).catch(() => {});
+      // Record unique views for displayed posts when browsed by registered non-admin travelers
+      if (type !== 'admin' && req.user && req.user.role !== 'ADMIN' && req.user.role !== 'SUPER_ADMIN' && postIds.length > 0) {
+        const viewerId = new mongoose.Types.ObjectId(req.user.id);
+        const viewOps = postIds.map((pid: any) => ({
+          updateOne: {
+            filter: { postId: pid, userId: viewerId },
+            update: { $setOnInsert: { postId: pid, userId: viewerId, createdAt: new Date() } },
+            upsert: true
+          }
+        }));
+        PostView.bulkWrite(viewOps, { ordered: false })
+          .then((res) => {
+            if (res.upsertedCount > 0) {
+              const insertedKeys = Object.values(res.upsertedIds);
+              PostView.find({ _id: { $in: insertedKeys } }).select('postId').lean()
+                .then((newViews) => {
+                  const newPostIds = newViews.map((nv: any) => nv.postId);
+                  if (newPostIds.length > 0) {
+                    Post.updateMany({ _id: { $in: newPostIds } }, { $inc: { viewsCount: 1 } }).catch(() => {});
+                  }
+                }).catch(() => {});
+            }
+          })
+          .catch(() => {});
       }
 
-      const [reactionCounts, repostCounts, userReactions, userRatings] = await Promise.all([
+      const [reactionCounts, repostCounts, viewCounts, userReactions, userRatings] = await Promise.all([
         PostReaction.aggregate([{ $match: { postId: { $in: postIds }, type: 'LIKE' } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
         PostReaction.aggregate([{ $match: { postId: { $in: postIds }, type: 'REPOST' } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
+        PostView.aggregate([{ $match: { postId: { $in: postIds } } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
         req.user ? PostReaction.find({ postId: { $in: postIds }, userId: req.user.id }).select('postId type').lean() : Promise.resolve([]),
         req.user ? PostRating.find({ postId: { $in: postIds }, userId: req.user.id }).select('postId rating').lean() : Promise.resolve([])
       ]);
 
       const likeCountMap = new Map(reactionCounts.map((item: any) => [item._id.toString(), item.count]));
       const repostCountMap = new Map(repostCounts.map((item: any) => [item._id.toString(), item.count]));
+      const viewCountMap = new Map(viewCounts.map((item: any) => [item._id.toString(), item.count]));
       const likedSet = new Set(userReactions.filter((r: any) => r.type === 'LIKE').map((item: any) => item.postId.toString()));
       const repostedSet = new Set(userReactions.filter((r: any) => r.type === 'REPOST').map((item: any) => item.postId.toString()));
       const ratingMap = new Map(userRatings.map((item: any) => [item.postId.toString(), item.rating]));
@@ -113,7 +136,7 @@ export class SocialController {
             isLiked: likedSet.has(pid),
             repostsCount: repostCountMap.get(pid) ?? (post.repostsCount || 0),
             isReposted: repostedSet.has(pid),
-            viewsCount: post.viewsCount || 0,
+            viewsCount: viewCountMap.get(pid) ?? 0,
             averageRating: post.averageRating || 0,
             ratingsCount: post.ratingsCount || 0,
             userRating: ratingMap.get(pid) || 0,
@@ -228,15 +251,25 @@ export class SocialController {
         { createdAt: { $lt: cursor.date } },
         { createdAt: cursor.date, _id: { $lt: cursor.id } }
       ];
-      const queried = await PostComment.find(filter).sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
+      const queried = await PostComment.find(filter)
+        .populate('userId', 'name username avatarUrl role email')
+        .sort({ createdAt: -1, _id: -1 })
+        .limit(limit + 1)
+        .lean();
       const hasMore = queried.length > limit;
       const comments = queried.slice(0, limit);
       const last = comments[comments.length - 1];
       res.status(200).json({
         success: true,
         comments: comments.map((comment: any) => ({
-          id: comment._id.toString(), userName: comment.userName, userAvatar: comment.userAvatar,
-          text: comment.text, createdAt: comment.createdAt
+          id: comment._id.toString(),
+          userName: comment.userName || comment.userId?.name || 'Traveler',
+          userHandle: comment.userId?.username ? `@${comment.userId.username}` : '',
+          userAvatar: comment.userAvatar || comment.userId?.avatarUrl || '',
+          userRole: comment.userId?.role || 'USER',
+          userEmail: comment.userId?.email || '',
+          text: comment.text,
+          createdAt: comment.createdAt
         })),
         nextCursor: hasMore && last ? encodeCursor(last.createdAt, last._id) : null
       });
@@ -676,21 +709,174 @@ export class SocialController {
     }
   }
 
-  public static async recordPostView(req: Request, res: Response): Promise<void> {
+  public static async recordPostView(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
       const postId = req.params.postId;
       if (!mongoose.isValidObjectId(postId)) {
         res.status(400).json({ success: false, message: 'Valid post ID is required.' });
         return;
       }
-      const post = await Post.findByIdAndUpdate(postId, { $inc: { viewsCount: 1 } }, { new: true }).select('viewsCount');
+
+      // Identify viewer: either from verified token (req.user), body userId, username, or email
+      const actor = getActor(req);
+      let viewerId = actor?.id;
+      let viewerRole = actor?.role;
+
+      if (!viewerId && req.body?.userId && mongoose.isValidObjectId(req.body.userId)) {
+        const dbUser = await User.findById(req.body.userId).select('role status');
+        if (dbUser && dbUser.status !== 'BLOCKED') {
+          viewerId = dbUser._id.toString();
+          viewerRole = dbUser.role;
+        }
+      }
+
+      if (!viewerId && (req.body?.username || req.body?.email)) {
+        const query: any[] = [];
+        if (req.body?.username) query.push({ username: req.body.username.toLowerCase() });
+        if (req.body?.email) query.push({ email: req.body.email.toLowerCase() });
+        const dbUser = await User.findOne({ $or: query }).select('_id role status');
+        if (dbUser && dbUser.status !== 'BLOCKED') {
+          viewerId = dbUser._id.toString();
+          viewerRole = dbUser.role;
+        }
+      }
+
+      if (!viewerId) {
+        res.status(401).json({ success: false, message: 'Registered user authentication required to count post views.' });
+        return;
+      }
+
+      const postObjectId = new mongoose.Types.ObjectId(postId);
+      const post = await Post.findById(postObjectId).select('viewsCount');
       if (!post) {
         res.status(404).json({ success: false, message: 'Post not found.' });
         return;
       }
-      res.status(200).json({ success: true, postId, viewsCount: post.viewsCount });
+
+      // Exclude Admin and Super Admin from view counts and tracking
+      if (viewerRole === 'ADMIN' || viewerRole === 'SUPER_ADMIN') {
+        const totalViews = await PostView.countDocuments({ postId: postObjectId });
+        res.status(200).json({
+          success: true,
+          postId,
+          viewsCount: totalViews,
+          counted: false,
+          reason: 'Admin views are excluded from view counts'
+        });
+        return;
+      }
+
+      // Unique view tracking: only ONE view per registered user per post!
+      const filter = {
+        postId: postObjectId,
+        userId: new mongoose.Types.ObjectId(viewerId)
+      };
+
+      let newlyRecorded = false;
+      try {
+        await PostView.create(filter);
+        newlyRecorded = true;
+      } catch (err: any) {
+        if (err?.code !== 11000) {
+          throw err;
+        }
+        // Duplicate key: this registered user has already viewed this post
+        newlyRecorded = false;
+      }
+
+      // Views count strictly equals real registered viewers count
+      const realViewsCount = await PostView.countDocuments({ postId: postObjectId });
+      await Post.updateOne({ _id: postObjectId }, { $set: { viewsCount: realViewsCount } }).catch(() => {});
+
+      res.status(200).json({
+        success: true,
+        postId,
+        viewsCount: realViewsCount,
+        counted: newlyRecorded
+      });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to record post view.' });
+    }
+  }
+
+  public static async getPostViews(req: Request, res: Response): Promise<void> {
+    try {
+      const postId = req.params.postId;
+      if (!mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'A valid post ID is required.' });
+        return;
+      }
+
+      const postObjectId = new mongoose.Types.ObjectId(postId);
+      const post = await Post.findById(postObjectId).select('userId viewsCount createdAt');
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+
+      // Sync existing viewers from post author and past interactions if PostView is empty
+      const existingViewCount = await PostView.countDocuments({ postId: postObjectId });
+      if (existingViewCount === 0) {
+        const candidateUserIds = new Set<string>();
+        if (post.userId) candidateUserIds.add(post.userId.toString());
+
+        const [reactions, comments, ratings] = await Promise.all([
+          PostReaction.find({ postId: postObjectId }).select('userId').lean(),
+          PostComment.find({ postId: postObjectId }).select('userId').lean(),
+          PostRating.find({ postId: postObjectId }).select('userId').lean()
+        ]);
+        reactions.forEach((r: any) => r.userId && candidateUserIds.add(r.userId.toString()));
+        comments.forEach((c: any) => c.userId && candidateUserIds.add(c.userId.toString()));
+        ratings.forEach((rt: any) => rt.userId && candidateUserIds.add(rt.userId.toString()));
+
+        if (candidateUserIds.size > 0) {
+          const validUsers = await User.find({
+            _id: { $in: Array.from(candidateUserIds).filter((id) => mongoose.isValidObjectId(id)).map((id) => new mongoose.Types.ObjectId(id)) },
+            role: { $nin: ['ADMIN', 'SUPER_ADMIN'] }
+          }).select('_id');
+
+          const backfillOps = validUsers.map((u) => ({
+            updateOne: {
+              filter: { postId: postObjectId, userId: u._id },
+              update: { $setOnInsert: { postId: postObjectId, userId: u._id, createdAt: post.createdAt || new Date() } },
+              upsert: true
+            }
+          }));
+          if (backfillOps.length > 0) {
+            await PostView.bulkWrite(backfillOps, { ordered: false }).catch(() => {});
+          }
+        }
+      }
+
+      const views = await PostView.find({ postId: postObjectId })
+        .populate('userId', 'name username avatarUrl role email status')
+        .sort({ createdAt: -1 })
+        .lean();
+
+      // Non-admin registered platform users (USER, TRAVELER, HOTEL_HOST, etc.)
+      const viewers = views
+        .filter((v: any) => v.userId && v.userId.role !== 'ADMIN' && v.userId.role !== 'SUPER_ADMIN')
+        .map((v: any) => ({
+          id: v.userId._id?.toString() || '',
+          name: v.userId.name || v.userId.username || 'Traveler',
+          username: v.userId.username || 'traveler',
+          avatarUrl: v.userId.avatarUrl || '',
+          role: v.userId.role || 'USER',
+          email: v.userId.email || '',
+          viewedAt: v.createdAt
+        }));
+
+      // Synchronize post viewsCount to match actual viewer count (strictly no arbitrary/default numbers)
+      await Post.updateOne({ _id: postObjectId }, { $set: { viewsCount: viewers.length } }).catch(() => {});
+
+      res.status(200).json({
+        success: true,
+        count: viewers.length,
+        viewsCount: viewers.length,
+        users: viewers
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load post viewers.' });
     }
   }
 
@@ -717,7 +903,8 @@ export class SocialController {
         Post.deleteOne({ _id: postId }),
         PostComment.deleteMany({ postId }),
         PostReaction.deleteMany({ postId }),
-        PostRating.deleteMany({ postId })
+        PostRating.deleteMany({ postId }),
+        PostView.deleteMany({ postId })
       ]);
       res.status(200).json({ success: true, message: 'Post deleted successfully.', postId });
     } catch {

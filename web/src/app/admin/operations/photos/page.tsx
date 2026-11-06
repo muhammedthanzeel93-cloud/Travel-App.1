@@ -61,7 +61,10 @@ interface SocialPost {
 interface CommentItem {
   id: string;
   userName: string;
+  userHandle?: string;
   userAvatar?: string;
+  userRole?: string;
+  userEmail?: string;
   text: string;
   createdAt?: string;
 }
@@ -75,6 +78,7 @@ interface ReactionUser {
   email?: string;
   likedAt?: string;
   repostedAt?: string;
+  viewedAt?: string;
 }
 
 interface RatingReviewItem {
@@ -135,6 +139,10 @@ export default function AdminPhotosPage() {
   const [activeRatingsPost, setActiveRatingsPost] = useState<SocialPost | null>(null);
   const [ratingsList, setRatingsList] = useState<RatingReviewItem[]>([]);
   const [loadingRatings, setLoadingRatings] = useState(false);
+
+  const [activeViewsPost, setActiveViewsPost] = useState<SocialPost | null>(null);
+  const [viewsList, setViewsList] = useState<ReactionUser[]>([]);
+  const [loadingViews, setLoadingViews] = useState(false);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -330,6 +338,29 @@ export default function AdminPhotosPage() {
       showNotification('Unable to load traveler reviews and ratings.', 'error');
     } finally {
       setLoadingRatings(false);
+    }
+  };
+
+  // Open Views Modal (View who viewed this post)
+  const handleOpenViewsModal = async (post: SocialPost) => {
+    setActiveViewsPost(post);
+    setLoadingViews(true);
+    setViewsList([]);
+    try {
+      const res = await fetch(`/api/social/posts/${post._id}/views`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        const users = data.users || [];
+        setViewsList(users);
+        const actualCount = typeof data.count === 'number' ? data.count : users.length;
+        setActiveViewsPost((prev) => prev ? { ...prev, viewsCount: actualCount } : null);
+        setAdminPosts((prev) => prev.map((p) => p._id === post._id ? { ...p, viewsCount: actualCount } : p));
+        setUserPosts((prev) => prev.map((p) => p._id === post._id ? { ...p, viewsCount: actualCount } : p));
+      }
+    } catch {
+      showNotification('Unable to load travelers who viewed this post.', 'error');
+    } finally {
+      setLoadingViews(false);
     }
   };
 
@@ -637,15 +668,19 @@ export default function AdminPhotosPage() {
                     {/* Engagement Actions Bar (Click to inspect likers, comments, reposters, views) */}
                     <div className="px-4 py-3 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between">
                       <div className="flex items-center gap-4">
-                        {/* Views Count */}
-                        <div
-                          className="flex items-center gap-1.5 text-xs text-slate-400"
-                          title="Total views on this photo post"
+                        {/* Views Count (Click to inspect travelers who viewed) */}
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenViewsModal(post)}
+                          className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-cyan-400 transition-colors cursor-pointer group"
+                          title="Click to view registered travelers who viewed this post"
                         >
-                          <Eye className="w-4 h-4 text-cyan-400" />
-                          <span className="text-white font-bold">{post.viewsCount || 0}</span>
-                          <span className="text-[11px] text-slate-500">Views</span>
-                        </div>
+                          <Eye className="w-4 h-4 text-cyan-400/80 group-hover:text-cyan-400 group-hover:scale-110 transition-transform" />
+                          <span className="text-white font-bold group-hover:text-cyan-300">{post.viewsCount || 0}</span>
+                          <span className="text-[11px] text-slate-500 group-hover:text-slate-300 underline decoration-slate-800 underline-offset-2">
+                            Views
+                          </span>
+                        </button>
 
                         {/* View Likes */}
                         <button
@@ -831,14 +866,17 @@ export default function AdminPhotosPage() {
                   {/* Actions Bar (Click to inspect likers, comments, reposters, views) */}
                   <div className="px-3.5 py-2.5 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center gap-3">
-                      {/* Total Views */}
-                      <div
-                        className="flex items-center gap-1 text-slate-400"
-                        title="Total views on this community photo post"
+                      {/* Total Views (Click to inspect travelers who viewed) */}
+                      <button
+                        type="button"
+                        onClick={() => void handleOpenViewsModal(post)}
+                        className="flex items-center gap-1 hover:text-cyan-400 transition-colors cursor-pointer group"
+                        title="Click to view registered travelers who viewed this post"
                       >
-                        <Eye className="w-3.5 h-3.5 text-cyan-400" />
-                        <span className="text-slate-300 font-semibold">{post.viewsCount || 0}</span>
-                      </div>
+                        <Eye className="w-3.5 h-3.5 text-cyan-400/80 group-hover:text-cyan-400 group-hover:scale-110 transition-transform" />
+                        <span className="text-slate-300 font-semibold group-hover:text-cyan-300">{post.viewsCount || 0}</span>
+                        <span className="text-[10px] text-slate-500 group-hover:text-slate-300">Views</span>
+                      </button>
 
                       {/* View Likes */}
                       <button
@@ -942,6 +980,11 @@ export default function AdminPhotosPage() {
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-400">@{u.username}</div>
+                        {u.email && (
+                          <div className="text-[10px] text-slate-500 font-mono truncate">
+                            {u.email}
+                          </div>
+                        )}
                       </div>
                     </div>
                     {u.likedAt && (
@@ -1017,6 +1060,11 @@ export default function AdminPhotosPage() {
                           </span>
                         </div>
                         <div className="text-[11px] text-slate-400">@{u.username}</div>
+                        {u.email && (
+                          <div className="text-[10px] text-slate-500 font-mono truncate">
+                            {u.email}
+                          </div>
+                        )}
                       </div>
                     </div>
                     {u.repostedAt && (
@@ -1070,12 +1118,37 @@ export default function AdminPhotosPage() {
                 commentsList.map((c) => (
                   <div
                     key={c.id}
-                    className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-1"
+                    className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl space-y-1.5"
                   >
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-amber-400">{c.userName}</span>
+                      <div className="flex items-center gap-2">
+                        {c.userAvatar ? (
+                          <img
+                            src={c.userAvatar}
+                            alt=""
+                            className="w-6 h-6 rounded-full object-cover border border-slate-700"
+                          />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-[10px]">
+                            {c.userName?.[0] || 'T'}
+                          </div>
+                        )}
+                        <span className="font-bold text-amber-400">{c.userName}</span>
+                        {c.userRole && (
+                          <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            {c.userRole}
+                          </span>
+                        )}
+                        {c.userHandle && (
+                          <span className="text-[11px] text-slate-500">{c.userHandle}</span>
+                        )}
+                      </div>
                       {c.createdAt && (
                         <span className="text-[10px] text-slate-500">
+                          {new Date(c.createdAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric'
+                          })}{' '}
                           {new Date(c.createdAt).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit'
@@ -1083,7 +1156,10 @@ export default function AdminPhotosPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-200">{c.text}</p>
+                    {c.userEmail && (
+                      <div className="text-[10px] text-slate-500 font-mono pl-8">{c.userEmail}</div>
+                    )}
+                    <p className="text-xs text-slate-200 pl-8">{c.text}</p>
                   </div>
                 ))
               )}
@@ -1093,6 +1169,110 @@ export default function AdminPhotosPage() {
             <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-400">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
               <span>Admins have read-only access. Comments are submitted by community travelers.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* POST VIEWERS MODAL (Who viewed this post) */}
+      {activeViewsPost && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b0f19] border border-cyan-500/30 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
+                  <Eye className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Post Viewers Directory</h3>
+                  <p className="text-[11px] text-slate-400">
+                    <span className="text-cyan-400 font-bold">{viewsList.length}</span> registered {viewsList.length === 1 ? 'traveler' : 'travelers'} viewed this post
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveViewsPost(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {loadingViews ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto text-cyan-400 mb-2" />
+                  Loading post viewers…
+                </div>
+              ) : viewsList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs space-y-1">
+                  <Eye className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                  <p className="text-slate-400 font-medium">No registered travelers have viewed this post yet.</p>
+                  <p className="text-[11px] text-slate-500">
+                    When registered platform travelers browse this photo, their profiles and timestamps will appear here.
+                  </p>
+                </div>
+              ) : (
+                viewsList.map((item, idx) => (
+                  <div
+                    key={`${item.id}-${idx}`}
+                    className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {item.avatarUrl ? (
+                        <img
+                          src={item.avatarUrl}
+                          alt=""
+                          className="w-9 h-9 rounded-full object-cover border border-slate-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-cyan-400 font-bold text-xs shrink-0">
+                          {item.name?.[0] || 'T'}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          {item.name}
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 shrink-0">
+                            {item.role || 'USER'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">@{item.username}</div>
+                        {item.email && (
+                          <div className="text-[10px] text-slate-500 truncate font-mono">
+                            {item.email}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0">
+                      <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded border border-cyan-500/20">
+                        VIEWED
+                      </span>
+                      {item.viewedAt && (
+                        <span className="text-[10px] text-slate-500 mt-1 whitespace-nowrap">
+                          {new Date(item.viewedAt).toLocaleDateString([], {
+                            month: 'short',
+                            day: 'numeric'
+                          })}{' '}
+                          {new Date(item.viewedAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Read-Only Notice for Admins */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-400">
+              <Info className="w-4 h-4 text-cyan-400 shrink-0" />
+              <span>Admins excluded. View counts increment once per registered platform traveler.</span>
             </div>
           </div>
         </div>

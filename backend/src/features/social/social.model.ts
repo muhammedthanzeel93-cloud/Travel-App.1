@@ -26,6 +26,12 @@ export interface IPostRating extends Document {
   updatedAt: Date;
 }
 
+export interface IPostView extends Document {
+  postId: mongoose.Types.ObjectId;
+  userId: mongoose.Types.ObjectId;
+  createdAt: Date;
+}
+
 export interface IPostComment extends Document {
   postId: mongoose.Types.ObjectId;
   userId: mongoose.Types.ObjectId;
@@ -221,6 +227,14 @@ const PostRatingSchema = new Schema<IPostRating>({
 PostRatingSchema.index({ postId: 1, userId: 1 }, { unique: true });
 PostRatingSchema.index({ postId: 1, rating: 1 });
 
+const PostViewSchema = new Schema<IPostView>({
+  postId: { type: Schema.Types.ObjectId, ref: 'Post', required: true },
+  userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+  createdAt: { type: Date, default: Date.now }
+}, { versionKey: false });
+PostViewSchema.index({ postId: 1, userId: 1 }, { unique: true });
+PostViewSchema.index({ postId: 1, createdAt: -1 });
+
 const StoryResponseSchema = new Schema<IStoryResponse>({
   storyId: { type: Schema.Types.ObjectId, ref: 'Story', required: true },
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
@@ -242,6 +256,7 @@ export const Post = mongoose.model<IPost>('Post', PostSchema);
 export const PostComment = mongoose.model<IPostComment>('PostComment', PostCommentSchema);
 export const PostReaction = mongoose.model<IPostReaction>('PostReaction', PostReactionSchema);
 export const PostRating = mongoose.model<IPostRating>('PostRating', PostRatingSchema);
+export const PostView = mongoose.model<IPostView>('PostView', PostViewSchema);
 export const StoryResponse = mongoose.model<IStoryResponse>('StoryResponse', StoryResponseSchema);
 export const Reel = mongoose.model<IReel>('Reel', ReelSchema);
 export const Story = mongoose.model<IStory>('Story', StorySchema);

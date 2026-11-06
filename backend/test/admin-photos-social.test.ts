@@ -1,7 +1,7 @@
 import { strict as assert } from 'assert';
 import mongoose from 'mongoose';
 import { SocialController } from '../src/features/social/social.controller.js';
-import { Post, PostRating, PostReaction, PostComment } from '../src/features/social/social.model.js';
+import { Post, PostRating, PostReaction, PostComment, PostView } from '../src/features/social/social.model.js';
 
 console.log('================================================================');
 console.log('🧪 TRAVEL BUDDY: ADMIN PHOTO STUDIO & SOCIAL INTERACTION TESTS');
@@ -263,21 +263,98 @@ async function runSocialSuite() {
   assert.equal(capturedJson.ratings[0].user.email, 'rahul@travelworld.com');
   console.log('✅ [PASS] getPostRatings successfully returned traveler review list with rating and email');
 
-  // Test recordPostView (Increment views on photo posts)
+  // 5c. Test recordPostView (Admins should NOT increment views)
+  const originalViewCreate = PostView.create;
   const originalFindByIdAndUpdate = Post.findByIdAndUpdate;
+  const originalViewCountDocuments = PostView.countDocuments;
+  const originalPostUpdateOne = Post.updateOne;
+
+  (PostView as any).create = async () => ({ _id: new mongoose.Types.ObjectId() });
+  (PostView as any).countDocuments = async () => 43;
+  (Post as any).updateOne = async () => true;
   (Post as any).findByIdAndUpdate = (id: any, update: any) => ({
-    select: async () => ({
-      viewsCount: 43
-    })
+    select: async () => ({ viewsCount: 43 })
   });
 
   await SocialController.recordPostView(
-    { params: { postId: testPostId.toString() } } as any,
+    {
+      user: { id: adminUserId.toString(), role: 'ADMIN' },
+      params: { postId: testPostId.toString() }
+    } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 200);
+  assert.equal(capturedJson.counted, false, 'Admin view should not be counted');
+  console.log('✅ [PASS] Admin view excluded from post view count (counted: false)');
+
+  // 5d. Test recordPostView (First time for registered traveler -> counted: true)
+
+  await SocialController.recordPostView(
+    {
+      user: { id: regularUserId.toString(), role: 'USER' },
+      params: { postId: testPostId.toString() }
+    } as any,
     mockRes
   );
   assert.equal(capturedStatus, 200, 'recordPostView should return HTTP 200');
   assert.equal(capturedJson.viewsCount, 43);
-  console.log('✅ [PASS] recordPostView successfully incremented and returned viewsCount: 43');
+  assert.equal(capturedJson.counted, true);
+  console.log('✅ [PASS] Regular user view successfully incremented viewsCount: 43 (counted: true)');
+
+  // 5e. Test recordPostView duplicate (User views again -> duplicate key, counted: false)
+  (PostView as any).create = async () => {
+    const duplicateError: any = new Error('Duplicate key');
+    duplicateError.code = 11000;
+    throw duplicateError;
+  };
+  (PostView as any).countDocuments = async () => 43;
+
+  await SocialController.recordPostView(
+    {
+      user: { id: regularUserId.toString(), role: 'USER' },
+      params: { postId: testPostId.toString() }
+    } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 200, 'recordPostView should return HTTP 200');
+  assert.equal(capturedJson.counted, false, 'Duplicate view should not be counted');
+  console.log('✅ [PASS] Duplicate user view prevented from re-incrementing (counted: false)');
+
+  // 5f. Test getPostViews (Admins inspecting who viewed the post)
+  (PostView as any).countDocuments = async () => 1;
+  const originalViewFind = PostView.find;
+  const mockViewResults = [
+    {
+      _id: new mongoose.Types.ObjectId(),
+      userId: {
+        _id: regularUserId,
+        name: 'Rahul Traveler',
+        username: 'rahul_v',
+        role: 'USER',
+        email: 'rahul@travelworld.com',
+        avatarUrl: 'https://images.unsplash.com/avatar.jpg'
+      },
+      createdAt: new Date('2026-11-06T10:00:00Z')
+    }
+  ];
+
+  (PostView as any).find = () => ({
+    populate: () => ({
+      sort: () => ({
+        lean: async () => mockViewResults
+      })
+    })
+  });
+
+  await SocialController.getPostViews(
+    { params: { postId: testPostId.toString() } } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 200, 'getPostViews should return HTTP 200');
+  assert.equal(capturedJson.count, 1);
+  assert.equal(capturedJson.users[0].name, 'Rahul Traveler');
+  assert.equal(capturedJson.users[0].email, 'rahul@travelworld.com');
+  console.log('✅ [PASS] getPostViews successfully returned list of travelers who viewed post');
 
   // --- Test 6: Post Deletion (Admin Moderation) ---
   console.log('\n--- 6. Post Deletion & Moderation ---');
@@ -290,6 +367,7 @@ async function runSocialSuite() {
   const originalCommentDeleteMany = PostComment.deleteMany;
   const originalReactionDeleteMany = PostReaction.deleteMany;
   const originalRatingDeleteMany = PostRating.deleteMany;
+  const originalViewDeleteMany = PostView.deleteMany;
 
   (Post as any).deleteOne = async (filter: any) => {
     deletedPostId = filter._id;
@@ -297,6 +375,7 @@ async function runSocialSuite() {
   (PostComment as any).deleteMany = async () => true;
   (PostReaction as any).deleteMany = async () => true;
   (PostRating as any).deleteMany = async () => true;
+  (PostView as any).deleteMany = async () => true;
 
   await SocialController.deletePost(
     {
@@ -319,11 +398,16 @@ async function runSocialSuite() {
   (PostReaction as any).countDocuments = originalReactionCountDocuments;
   (PostReaction as any).find = originalReactionFind;
   (PostRating as any).find = originalRatingFind;
+  (PostView as any).create = originalViewCreate;
+  (PostView as any).find = originalViewFind;
+  (PostView as any).countDocuments = originalViewCountDocuments;
+  (Post as any).updateOne = originalPostUpdateOne;
   (Post as any).findByIdAndUpdate = originalFindByIdAndUpdate;
   (Post as any).deleteOne = originalPostDeleteOne;
   (PostComment as any).deleteMany = originalCommentDeleteMany;
   (PostReaction as any).deleteMany = originalReactionDeleteMany;
   (PostRating as any).deleteMany = originalRatingDeleteMany;
+  (PostView as any).deleteMany = originalViewDeleteMany;
 
   console.log('\n================================================================');
   console.log('🏁 ALL ADMIN RESTRICTION & SOCIAL TESTS PASSED WITH 100% SUCCESS!');

@@ -1,6 +1,6 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { Bookmark, Heart, MapPin, MessageCircle, Send, ImagePlus, RefreshCw, Star, Repeat, Sparkles, Eye } from 'lucide-react';
 import { fetchFromApi } from '@/lib/api';
 import { getUserSession, subscribeToUserSession, UserSession } from '@/features/auth/userAuth';
@@ -53,6 +53,7 @@ export default function TravelSocialFeedPage() {
   const [busy, setBusy] = useState(false);
   const [user, setUser] = useState<UserSession | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const viewedPostIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     setIsMounted(true);
@@ -62,6 +63,24 @@ export default function TravelSocialFeedPage() {
     });
     return unsubscribe;
   }, []);
+
+  // Record unique post view when registered non-admin travelers browse feed posts
+  useEffect(() => {
+    if (!user || user.role === 'ADMIN' || user.role === 'SUPER_ADMIN' || posts.length === 0) return;
+    posts.forEach((p) => {
+      if (!viewedPostIdsRef.current.has(p._id)) {
+        viewedPostIdsRef.current.add(p._id);
+        void fetchFromApi(`/social/posts/${p._id}/view`, {
+          method: 'POST',
+          body: JSON.stringify({
+            userId: user.id,
+            username: user.username,
+            email: user.email
+          })
+        }).catch(() => {});
+      }
+    });
+  }, [posts, user]);
 
   const loadFeed = useCallback(async (cursor?: string) => {
     if (!cursor) setLoading(true);
