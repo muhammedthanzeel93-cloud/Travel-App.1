@@ -1,7 +1,7 @@
 'use client';
 
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Bookmark, Heart, MapPin, MessageCircle, Send, ImagePlus, RefreshCw, Star, Repeat, Sparkles } from 'lucide-react';
+import { Bookmark, Heart, MapPin, MessageCircle, Send, ImagePlus, RefreshCw, Star, Repeat, Sparkles, Eye } from 'lucide-react';
 import { fetchFromApi } from '@/lib/api';
 import { getUserSession, subscribeToUserSession, UserSession } from '@/features/auth/userAuth';
 
@@ -22,6 +22,7 @@ interface FeedPost {
   isLiked: boolean;
   repostsCount: number;
   isReposted: boolean;
+  viewsCount?: number;
   averageRating: number;
   ratingsCount: number;
   userRating: number;
@@ -278,7 +279,7 @@ export default function TravelSocialFeedPage() {
               </div>
             </div>
 
-            {/* Engagement buttons: Like, Comment, Repost, Save */}
+            {/* Engagement buttons: Like, Comment, Repost, Views, Save */}
             <div className="flex items-center gap-4 pt-1">
               <button onClick={() => void toggleLike(post)} className="inline-flex gap-1.5 items-center text-sm text-slate-200 hover:text-rose-400 cursor-pointer">
                 <Heart className={post.isLiked ? 'w-5 h-5 fill-rose-500 text-rose-500' : 'w-5 h-5'} />
@@ -298,6 +299,10 @@ export default function TravelSocialFeedPage() {
                 <Repeat className="w-5 h-5" />
                 <span>{post.repostsCount}</span>
               </button>
+              <span className="inline-flex gap-1.5 items-center text-sm text-slate-400" title="Views">
+                <Eye className="w-5 h-5 text-cyan-400/70" />
+                <span>{post.viewsCount || 0}</span>
+              </span>
               <button onClick={() => void toggleSave(post._id)} aria-label={savedPosts[post._id] ? 'Unsave post' : 'Save post'} className="ml-auto text-slate-400 hover:text-amber-400 cursor-pointer">
                 <Bookmark className={savedPosts[post._id] ? 'w-5 h-5 fill-amber-400 text-amber-400' : 'w-5 h-5'} />
               </button>

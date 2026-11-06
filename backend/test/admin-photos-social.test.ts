@@ -219,6 +219,66 @@ async function runSocialSuite() {
   assert.equal(capturedJson.users[0].username, 'rahul_v');
   console.log('✅ [PASS] getPostReposts successfully returned travelers who reposted the post');
 
+  // Test getPostRatings (Admins inspecting who gave reviews and star ratings)
+  const originalRatingFind = PostRating.find;
+  const mockRatingResults = [
+    {
+      _id: new mongoose.Types.ObjectId(),
+      rating: 5,
+      userId: {
+        _id: regularUserId,
+        name: 'Rahul Traveler',
+        username: 'rahul_v',
+        role: 'USER',
+        email: 'rahul@travelworld.com',
+        avatarUrl: 'https://images.unsplash.com/avatar.jpg'
+      },
+      createdAt: new Date('2026-11-05T12:00:00Z'),
+      updatedAt: new Date('2026-11-05T12:00:00Z')
+    }
+  ];
+
+  (PostRating as any).find = () => ({
+    populate: () => ({
+      sort: () => ({
+        lean: async () => mockRatingResults
+      })
+    })
+  });
+  (Post as any).findById = () => ({
+    select: async () => ({
+      averageRating: 5,
+      ratingsCount: 1,
+      viewsCount: 42
+    })
+  });
+
+  await SocialController.getPostRatings(
+    { params: { postId: testPostId.toString() } } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 200, 'getPostRatings should return HTTP 200');
+  assert.equal(capturedJson.count, 1);
+  assert.equal(capturedJson.ratings[0].rating, 5);
+  assert.equal(capturedJson.ratings[0].user.email, 'rahul@travelworld.com');
+  console.log('✅ [PASS] getPostRatings successfully returned traveler review list with rating and email');
+
+  // Test recordPostView (Increment views on photo posts)
+  const originalFindByIdAndUpdate = Post.findByIdAndUpdate;
+  (Post as any).findByIdAndUpdate = (id: any, update: any) => ({
+    select: async () => ({
+      viewsCount: 43
+    })
+  });
+
+  await SocialController.recordPostView(
+    { params: { postId: testPostId.toString() } } as any,
+    mockRes
+  );
+  assert.equal(capturedStatus, 200, 'recordPostView should return HTTP 200');
+  assert.equal(capturedJson.viewsCount, 43);
+  console.log('✅ [PASS] recordPostView successfully incremented and returned viewsCount: 43');
+
   // --- Test 6: Post Deletion (Admin Moderation) ---
   console.log('\n--- 6. Post Deletion & Moderation ---');
   let deletedPostId: any = null;
@@ -258,6 +318,8 @@ async function runSocialSuite() {
   (PostReaction as any).updateOne = originalReactionUpdateOne;
   (PostReaction as any).countDocuments = originalReactionCountDocuments;
   (PostReaction as any).find = originalReactionFind;
+  (PostRating as any).find = originalRatingFind;
+  (Post as any).findByIdAndUpdate = originalFindByIdAndUpdate;
   (Post as any).deleteOne = originalPostDeleteOne;
   (PostComment as any).deleteMany = originalCommentDeleteMany;
   (PostReaction as any).deleteMany = originalReactionDeleteMany;

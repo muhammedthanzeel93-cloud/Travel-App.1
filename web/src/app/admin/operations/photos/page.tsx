@@ -50,6 +50,7 @@ interface SocialPost {
   city?: string;
   likesCount: number;
   repostsCount: number;
+  viewsCount: number;
   averageRating: number;
   ratingsCount: number;
   isAdminPost: boolean;
@@ -74,6 +75,20 @@ interface ReactionUser {
   email?: string;
   likedAt?: string;
   repostedAt?: string;
+}
+
+interface RatingReviewItem {
+  id: string;
+  rating: number;
+  user: {
+    id: string;
+    name: string;
+    username: string;
+    avatarUrl?: string;
+    role?: string;
+    email?: string;
+  };
+  ratedAt?: string;
 }
 
 export default function AdminPhotosPage() {
@@ -116,6 +131,10 @@ export default function AdminPhotosPage() {
   const [activeCommentsPost, setActiveCommentsPost] = useState<SocialPost | null>(null);
   const [commentsList, setCommentsList] = useState<CommentItem[]>([]);
   const [loadingComments, setLoadingComments] = useState(false);
+
+  const [activeRatingsPost, setActiveRatingsPost] = useState<SocialPost | null>(null);
+  const [ratingsList, setRatingsList] = useState<RatingReviewItem[]>([]);
+  const [loadingRatings, setLoadingRatings] = useState(false);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -294,6 +313,23 @@ export default function AdminPhotosPage() {
       showNotification('Unable to load comments.', 'error');
     } finally {
       setLoadingComments(false);
+    }
+  };
+
+  // Open Reviews & Star Ratings Modal (View who rated)
+  const handleOpenRatingsModal = async (post: SocialPost) => {
+    setActiveRatingsPost(post);
+    setLoadingRatings(true);
+    try {
+      const res = await fetch(`/api/social/posts/${post._id}/ratings`, { credentials: 'include' });
+      if (res.ok) {
+        const data = await res.json();
+        setRatingsList(data.ratings || []);
+      }
+    } catch {
+      showNotification('Unable to load traveler reviews and ratings.', 'error');
+    } finally {
+      setLoadingRatings(false);
     }
   };
 
@@ -568,8 +604,13 @@ export default function AdminPhotosPage() {
                           {post.caption}
                         </p>
 
-                        {/* Read-Only Star Rating Display */}
-                        <div className="flex items-center justify-between p-2.5 bg-slate-950/70 border border-slate-800 rounded-xl">
+                        {/* Interactive Star Rating Display (Click to inspect reviewer ratings) */}
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenRatingsModal(post)}
+                          className="w-full flex items-center justify-between p-2.5 bg-slate-950/70 hover:bg-slate-900 border border-slate-800 hover:border-amber-500/40 rounded-xl transition-all cursor-pointer group text-left"
+                          title="Click to view all travelers who rated this post"
+                        >
                           <div className="flex items-center gap-1">
                             {[1, 2, 3, 4, 5].map((starVal) => {
                               const isFilled = Math.round(post.averageRating) >= starVal;
@@ -586,16 +627,26 @@ export default function AdminPhotosPage() {
                               {post.averageRating > 0 ? `${post.averageRating.toFixed(1)} ★` : 'No ratings yet'}
                             </span>
                           </div>
-                          <span className="text-[11px] text-slate-400 font-medium">
-                            {post.ratingsCount} {post.ratingsCount === 1 ? 'user rating' : 'user ratings'}
+                          <span className="text-[11px] text-slate-400 group-hover:text-amber-400 font-medium underline decoration-slate-700 underline-offset-2 transition-colors">
+                            {post.ratingsCount} {post.ratingsCount === 1 ? 'review' : 'reviews'} →
                           </span>
-                        </div>
+                        </button>
                       </div>
                     </div>
 
-                    {/* Engagement Actions Bar (Click to inspect likers, comments, reposters) */}
+                    {/* Engagement Actions Bar (Click to inspect likers, comments, reposters, views) */}
                     <div className="px-4 py-3 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between">
                       <div className="flex items-center gap-4">
+                        {/* Views Count */}
+                        <div
+                          className="flex items-center gap-1.5 text-xs text-slate-400"
+                          title="Total views on this photo post"
+                        >
+                          <Eye className="w-4 h-4 text-cyan-400" />
+                          <span className="text-white font-bold">{post.viewsCount || 0}</span>
+                          <span className="text-[11px] text-slate-500">Views</span>
+                        </div>
+
                         {/* View Likes */}
                         <button
                           onClick={() => void handleOpenLikesModal(post)}
@@ -754,17 +805,22 @@ export default function AdminPhotosPage() {
                     <div className="p-3.5 space-y-2.5">
                       <p className="text-xs text-slate-300 line-clamp-3">{post.caption}</p>
 
-                      {/* Read-only Star Rating for Community Posts */}
+                      {/* Read-only Star Rating for Community Posts (Click to view reviewers) */}
                       <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-800/60">
-                        <div className="flex items-center gap-1 text-amber-400 font-bold">
-                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenRatingsModal(post)}
+                          className="flex items-center gap-1.5 text-amber-400 font-bold hover:text-amber-300 transition-colors group cursor-pointer text-left"
+                          title="Click to view all travelers who rated this post"
+                        >
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400 group-hover:scale-110 transition-transform" />
                           <span>
                             {post.averageRating > 0 ? `${post.averageRating.toFixed(1)} ★` : 'Unrated'}
                           </span>
-                          <span className="text-[10px] text-slate-500 font-normal">
-                            ({post.ratingsCount} reviews)
+                          <span className="text-[10px] text-slate-400 group-hover:text-amber-400 font-medium underline decoration-slate-700 underline-offset-2 transition-colors">
+                            ({post.ratingsCount} {post.ratingsCount === 1 ? 'review' : 'reviews'}) →
                           </span>
-                        </div>
+                        </button>
                         <span className="text-[10px] text-slate-500">
                           {new Date(post.createdAt).toLocaleDateString()}
                         </span>
@@ -772,9 +828,18 @@ export default function AdminPhotosPage() {
                     </div>
                   </div>
 
-                  {/* Actions Bar (Click to inspect likers, comments, reposters) */}
+                  {/* Actions Bar (Click to inspect likers, comments, reposters, views) */}
                   <div className="px-3.5 py-2.5 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
                     <div className="flex items-center gap-3">
+                      {/* Total Views */}
+                      <div
+                        className="flex items-center gap-1 text-slate-400"
+                        title="Total views on this community photo post"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-cyan-400" />
+                        <span className="text-slate-300 font-semibold">{post.viewsCount || 0}</span>
+                      </div>
+
                       {/* View Likes */}
                       <button
                         onClick={() => void handleOpenLikesModal(post)}
@@ -1028,6 +1093,109 @@ export default function AdminPhotosPage() {
             <div className="p-3.5 bg-slate-950 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-400">
               <Info className="w-4 h-4 text-amber-400 shrink-0" />
               <span>Admins have read-only access. Comments are submitted by community travelers.</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* REVIEWS & RATINGS MODAL (Who rated this post) */}
+      {activeRatingsPost && (
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-[#0b0f19] border border-amber-500/30 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Star className="w-4 h-4 fill-amber-400" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-sm">Traveler Reviews & Star Ratings</h3>
+                  <p className="text-[11px] text-slate-400">
+                    {ratingsList.length} {ratingsList.length === 1 ? 'review' : 'reviews'} • Average{' '}
+                    <span className="text-amber-400 font-bold">
+                      {activeRatingsPost.averageRating > 0 ? `${activeRatingsPost.averageRating.toFixed(1)} ★` : '0 ★'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setActiveRatingsPost(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg cursor-pointer"
+                title="Close"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+              {loadingRatings ? (
+                <div className="p-8 text-center text-slate-400 text-xs">
+                  <RefreshCw className="w-5 h-5 animate-spin mx-auto text-amber-400 mb-2" />
+                  Loading traveler reviews…
+                </div>
+              ) : ratingsList.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-xs space-y-1">
+                  <Star className="w-8 h-8 text-slate-700 mx-auto mb-2" />
+                  <p className="text-slate-400 font-medium">No reviews submitted yet.</p>
+                  <p className="text-[11px] text-slate-500">
+                    When registered community travelers rate this destination, their feedback and ratings will appear here.
+                  </p>
+                </div>
+              ) : (
+                ratingsList.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-3 bg-slate-950/60 border border-slate-800/80 rounded-xl flex items-center justify-between gap-3"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      {item.user?.avatarUrl ? (
+                        <img
+                          src={item.user.avatarUrl}
+                          alt=""
+                          className="w-9 h-9 rounded-full object-cover border border-slate-700 shrink-0"
+                        />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-slate-800 flex items-center justify-center text-amber-400 font-bold text-xs shrink-0">
+                          {item.user?.name?.[0] || 'T'}
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="text-xs font-bold text-white flex items-center gap-1.5 truncate">
+                          {item.user?.name || 'Traveler'}
+                          <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 shrink-0">
+                            {item.user?.role || 'USER'}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-slate-400 truncate">
+                          @{item.user?.username || 'traveler'}
+                        </div>
+                        {item.user?.email && (
+                          <div className="text-[10px] text-slate-500 truncate font-mono">
+                            {item.user.email}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col items-end shrink-0">
+                      <div className="flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded-lg text-amber-400 text-xs font-bold">
+                        <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                        <span>{item.rating} ★</span>
+                      </div>
+                      {item.ratedAt && (
+                        <span className="text-[10px] text-slate-500 mt-1 whitespace-nowrap">
+                          {new Date(item.ratedAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* Read-Only Notice for Admins */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center gap-2 text-xs text-slate-400">
+              <Info className="w-4 h-4 text-amber-400 shrink-0" />
+              <span>Admins have read-only inspection access. Star ratings are submitted by verified travelers.</span>
             </div>
           </div>
         </div>

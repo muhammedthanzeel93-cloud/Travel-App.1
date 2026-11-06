@@ -8,6 +8,8 @@ router.get('/feed', optionalAuthenticateToken, SocialController.getFeed);
 router.get('/posts/:postId/comments', SocialController.getComments);
 router.get('/posts/:postId/likes', SocialController.getPostLikes);
 router.get('/posts/:postId/reposts', SocialController.getPostReposts);
+router.get('/posts/:postId/ratings', SocialController.getPostRatings);
+router.post('/posts/:postId/view', SocialController.recordPostView);
 router.post('/posts', authenticateToken, SocialController.createPost);
 router.post('/posts/:postId/like', authenticateToken, SocialController.toggleLikePost);
 router.post('/posts/:postId/repost', authenticateToken, SocialController.toggleRepost);

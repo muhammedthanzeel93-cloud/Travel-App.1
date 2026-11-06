@@ -9,6 +9,7 @@ export interface IPost extends Document {
   commentsCount: number;
   likesCount: number;
   repostsCount: number;
+  viewsCount: number;
   ratingSum: number;
   ratingsCount: number;
   averageRating: number;
@@ -116,6 +117,7 @@ const PostSchema = new Schema<IPost>(
     commentsCount: { type: Number, default: 0 },
     likesCount: { type: Number, default: 0 },
     repostsCount: { type: Number, default: 0 },
+    viewsCount: { type: Number, default: 0 },
     ratingSum: { type: Number, default: 0 },
     ratingsCount: { type: Number, default: 0 },
     averageRating: { type: Number, default: 0 },

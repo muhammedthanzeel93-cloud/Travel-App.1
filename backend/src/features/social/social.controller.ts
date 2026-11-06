@@ -63,12 +63,17 @@ export class SocialController {
         { createdAt: cursor.date, _id: { $lt: cursor.id } }
       ];
       const queried = await Post.find(filter)
-        .select('userId images caption locationName city commentsCount likesCount repostsCount ratingSum ratingsCount averageRating isAdminPost createdAt')
+        .select('userId images caption locationName city commentsCount likesCount repostsCount viewsCount ratingSum ratingsCount averageRating isAdminPost createdAt')
         .populate('userId', 'name username avatarUrl role isVerified')
         .sort({ createdAt: -1, _id: -1 }).limit(limit + 1).lean();
       const hasMore = queried.length > limit;
       const posts = queried.slice(0, limit);
       const postIds = posts.map((post: any) => post._id);
+
+      // Increment view counts for displayed posts when browsed on traveler feed
+      if (type !== 'admin' && postIds.length > 0) {
+        Post.updateMany({ _id: { $in: postIds } }, { $inc: { viewsCount: 1 } }).catch(() => {});
+      }
 
       const [reactionCounts, repostCounts, userReactions, userRatings] = await Promise.all([
         PostReaction.aggregate([{ $match: { postId: { $in: postIds }, type: 'LIKE' } }, { $group: { _id: '$postId', count: { $sum: 1 } } }]),
@@ -108,6 +113,7 @@ export class SocialController {
             isLiked: likedSet.has(pid),
             repostsCount: repostCountMap.get(pid) ?? (post.repostsCount || 0),
             isReposted: repostedSet.has(pid),
+            viewsCount: post.viewsCount || 0,
             averageRating: post.averageRating || 0,
             ratingsCount: post.ratingsCount || 0,
             userRating: ratingMap.get(pid) || 0,
@@ -629,6 +635,62 @@ export class SocialController {
       });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to load post reposts.' });
+    }
+  }
+
+  public static async getPostRatings(req: Request, res: Response): Promise<void> {
+    try {
+      const postId = req.params.postId;
+      if (!mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'A valid post ID is required.' });
+        return;
+      }
+      const ratings = await PostRating.find({ postId })
+        .populate('userId', 'name username avatarUrl role email')
+        .sort({ updatedAt: -1, createdAt: -1 })
+        .lean();
+
+      const post = await Post.findById(postId).select('averageRating ratingsCount ratingSum viewsCount');
+
+      res.status(200).json({
+        success: true,
+        count: ratings.length,
+        averageRating: post?.averageRating || 0,
+        ratingsCount: post?.ratingsCount || ratings.length,
+        ratings: ratings.map((r: any) => ({
+          id: r._id?.toString() || '',
+          rating: r.rating,
+          user: {
+            id: r.userId?._id?.toString() || '',
+            name: r.userId?.name || r.userId?.username || 'Traveler',
+            username: r.userId?.username || 'traveler',
+            avatarUrl: r.userId?.avatarUrl || '',
+            role: r.userId?.role || 'USER',
+            email: r.userId?.email || ''
+          },
+          ratedAt: r.updatedAt || r.createdAt
+        }))
+      });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to load post ratings and reviews.' });
+    }
+  }
+
+  public static async recordPostView(req: Request, res: Response): Promise<void> {
+    try {
+      const postId = req.params.postId;
+      if (!mongoose.isValidObjectId(postId)) {
+        res.status(400).json({ success: false, message: 'Valid post ID is required.' });
+        return;
+      }
+      const post = await Post.findByIdAndUpdate(postId, { $inc: { viewsCount: 1 } }, { new: true }).select('viewsCount');
+      if (!post) {
+        res.status(404).json({ success: false, message: 'Post not found.' });
+        return;
+      }
+      res.status(200).json({ success: true, postId, viewsCount: post.viewsCount });
+    } catch {
+      res.status(500).json({ success: false, message: 'Unable to record post view.' });
     }
   }
 
