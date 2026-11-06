@@ -3,7 +3,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Bookmark, Heart, MapPin, MessageCircle, Send, ImagePlus, RefreshCw, Star, Repeat, Sparkles } from 'lucide-react';
 import { fetchFromApi } from '@/lib/api';
-import { getUserSession } from '@/features/auth/userAuth';
+import { getUserSession, subscribeToUserSession, UserSession } from '@/features/auth/userAuth';
 
 interface FeedComment {
   userName: string;
@@ -50,7 +50,17 @@ export default function TravelSocialFeedPage() {
   const [imageUrls, setImageUrls] = useState('');
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
-  const user = getUserSession();
+  const [user, setUser] = useState<UserSession | null>(null);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+    setUser(getUserSession());
+    const unsubscribe = subscribeToUserSession((session) => {
+      setUser(session);
+    });
+    return unsubscribe;
+  }, []);
 
   const loadFeed = useCallback(async (cursor?: string) => {
     if (!cursor) setLoading(true);
@@ -186,8 +196,8 @@ export default function TravelSocialFeedPage() {
             placeholder="Image URL (one per line)" className="w-full min-h-16 rounded-xl bg-slate-950 border border-slate-800 p-3 text-sm text-white" />
           <div className="flex justify-between items-center">
             <span className="text-xs text-slate-500">Add direct image URLs to feature your journey.</span>
-            <button disabled={busy || !user} className="px-4 py-2 rounded-lg bg-amber-500 text-slate-950 text-sm font-bold disabled:opacity-50">
-              {busy ? 'Publishing…' : user ? 'Publish' : 'Sign in to publish'}
+            <button disabled={busy || !isMounted || !user} className="px-4 py-2 rounded-lg bg-amber-500 text-slate-950 text-sm font-bold disabled:opacity-50">
+              {busy ? 'Publishing…' : isMounted && user ? 'Publish' : 'Sign in to publish'}
             </button>
           </div>
         </form>
@@ -311,8 +321,8 @@ export default function TravelSocialFeedPage() {
               )}
               <form onSubmit={(event) => void addComment(event, post._id)} className="flex gap-2">
                 <input value={commentDrafts[post._id] || ''} onChange={(e) => setCommentDrafts((current) => ({ ...current, [post._id]: e.target.value }))}
-                  maxLength={2000} placeholder={user ? 'Add a comment…' : 'Sign in to comment'} className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
-                <button disabled={!user} aria-label="Send comment" className="text-amber-400 disabled:opacity-40 cursor-pointer"><Send className="w-4 h-4" /></button>
+                  maxLength={2000} placeholder={isMounted && user ? 'Add a comment…' : 'Sign in to comment'} className="flex-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-amber-500" />
+                <button disabled={!isMounted || !user} aria-label="Send comment" className="text-amber-400 disabled:opacity-40 cursor-pointer"><Send className="w-4 h-4" /></button>
               </form>
             </div>
           </div>
