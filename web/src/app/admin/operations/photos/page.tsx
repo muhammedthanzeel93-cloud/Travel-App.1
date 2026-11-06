@@ -7,6 +7,8 @@ import {
   Camera,
   UploadCloud,
   Image as ImageIcon,
+  ImagePlus,
+  Plus,
   MapPin,
   Star,
   Heart,
@@ -82,6 +84,9 @@ export default function AdminPhotosPage() {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
+  // Toggle state for Create Official Admin Photo Post (open via Plus / ImagePlus icon)
+  const [showCreateStudio, setShowCreateStudio] = useState(false);
+
   // Form states for Admin Studio
   const [uploadedImages, setUploadedImages] = useState<string[]>([]);
   const [manualImageUrl, setManualImageUrl] = useState('');
@@ -147,6 +152,12 @@ export default function AdminPhotosPage() {
 
   useEffect(() => {
     void fetchAllPosts();
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('new') === 'true' || params.get('create') === 'true') {
+        setShowCreateStudio(true);
+      }
+    }
   }, []);
 
   // Handle local file uploads
@@ -226,6 +237,7 @@ export default function AdminPhotosPage() {
       setCaption('');
       setLocationName('');
       setCity('');
+      setShowCreateStudio(false);
       await fetchAllPosts(false);
     } catch (err: any) {
       showNotification(err.message || 'Failed to publish post.', 'error');
@@ -443,184 +455,246 @@ export default function AdminPhotosPage() {
       {/* PART 1: ADMIN PHOTO POST STUDIO */}
       {activeTab === 'admin_studio' && (
         <div className="space-y-6">
-          {/* Post Creation Studio Card */}
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl p-5 sm:p-6 shadow-xl">
-            <div className="flex items-center gap-2.5 pb-4 mb-5 border-b border-slate-800/80">
-              <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
-                <Sparkles className="w-5 h-5" />
+          {/* Header Action Bar with + Create Post / ImagePlus Button */}
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
+                <Camera className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-bold text-white">Create Official Admin Photo Post</h2>
-                <p className="text-xs text-slate-400">
-                  Upload destination photos with location tags. Posts will receive ratings, likes, comments, and reposts directly from community travelers.
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-bold text-white">Admin Published Posts</h3>
+                  <span className="px-2 py-0.5 rounded-full text-xs bg-slate-800 text-amber-400 font-extrabold">
+                    {adminPosts.length}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Official travel destinations published by administrators • Travelers can view, like, comment, and rate
                 </p>
               </div>
             </div>
 
-            <form onSubmit={handlePublishAdminPost} className="space-y-5">
-              {/* Image Upload Section */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Photo Upload (Multiple Images Supported)
-                </label>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* File Drag/Drop or Browse */}
-                  <div
-                    onClick={() => fileInputRef.current?.click()}
-                    className="border-2 border-dashed border-slate-700 hover:border-amber-500/60 bg-slate-950/60 hover:bg-slate-900/50 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all group"
-                  >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      onChange={handleFileUpload}
-                      className="hidden"
-                    />
-                    <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-amber-400 transition-colors mb-2" />
-                    <span className="text-xs font-semibold text-white group-hover:text-amber-400">
-                      Click to choose photos from device
-                    </span>
-                    <span className="text-[11px] text-slate-500 mt-1">PNG, JPG, WEBP up to 7MB</span>
-                  </div>
+            <button
+              type="button"
+              onClick={() => setShowCreateStudio(!showCreateStudio)}
+              className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl font-bold text-xs transition-all cursor-pointer shadow-lg shrink-0 ${
+                showCreateStudio
+                  ? 'bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700'
+                  : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 shadow-amber-500/20'
+              }`}
+            >
+              {showCreateStudio ? (
+                <>
+                  <X className="w-4 h-4" />
+                  <span>Hide Creator</span>
+                </>
+              ) : (
+                <>
+                  <ImagePlus className="w-4 h-4 stroke-[2.5]" />
+                  <span>+ Create Official Photo Post</span>
+                </>
+              )}
+            </button>
+          </div>
 
-                  {/* Web Image URL Alternative */}
-                  <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
-                    <div>
-                      <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                        <ImageIcon className="w-4 h-4 text-amber-400" /> Or paste image web URL
-                      </span>
-                      <p className="text-[11px] text-slate-500 mt-1">
-                        Add direct image links (https://...)
-                      </p>
-                    </div>
-                    <div className="flex gap-2 mt-3">
-                      <input
-                        type="url"
-                        value={manualImageUrl}
-                        onChange={(e) => setManualImageUrl(e.target.value)}
-                        placeholder="https://images.unsplash.com/photo-..."
-                        className="flex-1 bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleAddUrlImage}
-                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg transition-colors cursor-pointer"
-                      >
-                        Add URL
-                      </button>
-                    </div>
+          {/* Collapsible Post Creation Studio Card (Shown ONLY when Plus / ImagePlus button is clicked) */}
+          {showCreateStudio && (
+            <div className="bg-[#0b0f19] border border-amber-500/40 rounded-2xl p-5 sm:p-6 shadow-2xl animate-in fade-in slide-in-from-top-3 duration-200">
+              <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-800/80">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-bold text-white">Create Official Admin Photo Post</h2>
+                    <p className="text-xs text-slate-400">
+                      Upload destination photos with location tags. Posts will receive ratings, likes, comments, and reposts directly from community travelers.
+                    </p>
                   </div>
                 </div>
 
-                {/* Uploaded Images Preview Strip */}
-                {uploadedImages.length > 0 && (
-                  <div className="mt-3">
-                    <span className="text-[11px] font-semibold text-slate-400 mb-2 block">
-                      Selected Photos ({uploadedImages.length}/10):
-                    </span>
-                    <div className="flex flex-wrap gap-3">
-                      {uploadedImages.map((src, idx) => (
-                        <div
-                          key={idx}
-                          className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-700 group bg-slate-950"
-                        >
-                          <img
-                            src={src}
-                            alt="preview"
-                            className="w-full h-full object-cover"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveImage(idx)}
-                            className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-80 hover:opacity-100 transition-opacity"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Caption / Description Details */}
-              <div className="space-y-2">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Post Caption & Destination Details
-                </label>
-                <textarea
-                  value={caption}
-                  onChange={(e) => setCaption(e.target.value)}
-                  placeholder="Describe this destination, travel tips, history, best time to visit, ticket costs..."
-                  rows={3}
-                  required
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
-                />
-              </div>
-
-              {/* Location & Traveler Rating row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Location Name */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-amber-400" /> Location / Landmark
-                  </label>
-                  <input
-                    type="text"
-                    value={locationName}
-                    onChange={(e) => setLocationName(e.target.value)}
-                    placeholder="e.g. Athirappilly Waterfalls"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                {/* City */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Building className="w-3.5 h-3.5 text-amber-400" /> District / City
-                  </label>
-                  <input
-                    type="text"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    placeholder="e.g. Thrissur, Kerala"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
-                  />
-                </div>
-
-                {/* Star Rating Info (Read-only for Admins; rated exclusively by users) */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
-                    <Star className="w-3.5 h-3.5 text-amber-400" /> Community Traveler Rating
-                  </label>
-                  <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl">
-                    <div className="flex items-center gap-1">
-                      {[1, 2, 3, 4, 5].map((s) => (
-                        <Star key={s} className="w-3.5 h-3.5 text-slate-700" />
-                      ))}
-                      <span className="text-xs font-semibold text-slate-400 ml-1.5">Unrated</span>
-                    </div>
-                    <span className="text-[10px] font-bold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
-                      User Rated Only
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Submit Button */}
-              <div className="flex justify-end pt-2">
                 <button
-                  type="submit"
-                  disabled={isSubmitting || uploadedImages.length === 0 || !caption.trim()}
-                  className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-sm shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                  type="button"
+                  onClick={() => setShowCreateStudio(false)}
+                  className="p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors cursor-pointer"
+                  title="Close upload studio"
                 >
-                  <UploadCloud className="w-4 h-4" />
-                  {isSubmitting ? 'Publishing Post…' : 'Publish Admin Photo Post'}
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-            </form>
-          </div>
+
+              <form onSubmit={handlePublishAdminPost} className="space-y-5">
+                {/* Image Upload Section */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Photo Upload (Multiple Images Supported)
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* File Drag/Drop or Browse */}
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="border-2 border-dashed border-slate-700 hover:border-amber-500/60 bg-slate-950/60 hover:bg-slate-900/50 rounded-xl p-5 flex flex-col items-center justify-center text-center cursor-pointer transition-all group"
+                    >
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={handleFileUpload}
+                        className="hidden"
+                      />
+                      <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-amber-400 transition-colors mb-2" />
+                      <span className="text-xs font-semibold text-white group-hover:text-amber-400">
+                        Click to choose photos from device
+                      </span>
+                      <span className="text-[11px] text-slate-500 mt-1">PNG, JPG, WEBP up to 7MB</span>
+                    </div>
+
+                    {/* Web Image URL Alternative */}
+                    <div className="bg-slate-950/60 border border-slate-800 rounded-xl p-4 flex flex-col justify-between">
+                      <div>
+                        <span className="text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                          <ImageIcon className="w-4 h-4 text-amber-400" /> Or paste image web URL
+                        </span>
+                        <p className="text-[11px] text-slate-500 mt-1">
+                          Add direct image links (https://...)
+                        </p>
+                      </div>
+                      <div className="flex gap-2 mt-3">
+                        <input
+                          type="url"
+                          value={manualImageUrl}
+                          onChange={(e) => setManualImageUrl(e.target.value)}
+                          placeholder="https://images.unsplash.com/photo-..."
+                          className="flex-1 bg-slate-900 border border-slate-700/80 rounded-lg px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddUrlImage}
+                          className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg transition-colors cursor-pointer"
+                        >
+                          Add URL
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Uploaded Images Preview Strip */}
+                  {uploadedImages.length > 0 && (
+                    <div className="mt-3">
+                      <span className="text-[11px] font-semibold text-slate-400 mb-2 block">
+                        Selected Photos ({uploadedImages.length}/10):
+                      </span>
+                      <div className="flex flex-wrap gap-3">
+                        {uploadedImages.map((src, idx) => (
+                          <div
+                            key={idx}
+                            className="relative w-20 h-20 rounded-xl overflow-hidden border border-slate-700 group bg-slate-950"
+                          >
+                            <img
+                              src={src}
+                              alt="preview"
+                              className="w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveImage(idx)}
+                              className="absolute top-1 right-1 p-1 bg-rose-600 hover:bg-rose-700 text-white rounded-full opacity-80 hover:opacity-100 transition-opacity"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Caption / Description Details */}
+                <div className="space-y-2">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                    Post Caption & Destination Details
+                  </label>
+                  <textarea
+                    value={caption}
+                    onChange={(e) => setCaption(e.target.value)}
+                    placeholder="Describe this destination, travel tips, history, best time to visit, ticket costs..."
+                    rows={3}
+                    required
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 transition-colors"
+                  />
+                </div>
+
+                {/* Location & Traveler Rating row */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Location Name */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-amber-400" /> Location / Landmark
+                    </label>
+                    <input
+                      type="text"
+                      value={locationName}
+                      onChange={(e) => setLocationName(e.target.value)}
+                      placeholder="e.g. Athirappilly Waterfalls"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* City */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Building className="w-3.5 h-3.5 text-amber-400" /> District / City
+                    </label>
+                    <input
+                      type="text"
+                      value={city}
+                      onChange={(e) => setCity(e.target.value)}
+                      placeholder="e.g. Thrissur, Kerala"
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+
+                  {/* Star Rating Info (Read-only for Admins; rated exclusively by users) */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
+                      <Star className="w-3.5 h-3.5 text-amber-400" /> Community Traveler Rating
+                    </label>
+                    <div className="flex items-center justify-between px-3.5 py-2.5 bg-slate-950/80 border border-slate-800 rounded-xl">
+                      <div className="flex items-center gap-1">
+                        {[1, 2, 3, 4, 5].map((s) => (
+                          <Star key={s} className="w-3.5 h-3.5 text-slate-700" />
+                        ))}
+                        <span className="text-xs font-semibold text-slate-400 ml-1.5">Unrated</span>
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-400/90 bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                        User Rated Only
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Submit & Cancel Buttons */}
+                <div className="flex justify-end items-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowCreateStudio(false)}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-800 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSubmitting || uploadedImages.length === 0 || !caption.trim()}
+                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                  >
+                    <UploadCloud className="w-4 h-4" />
+                    {isSubmitting ? 'Publishing Post…' : 'Publish Admin Photo Post'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Admin's Published Posts Stream */}
           <div className="space-y-4">
@@ -642,9 +716,17 @@ export default function AdminPhotosPage() {
                 Loading published admin posts…
               </div>
             ) : adminPosts.length === 0 ? (
-              <div className="p-12 text-center text-slate-400 bg-[#0b0f19] border border-slate-800 rounded-2xl">
-                <ImageIcon className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                No admin posts published yet. Upload your first post using the studio above!
+              <div className="p-12 text-center text-slate-400 bg-[#0b0f19] border border-slate-800 rounded-2xl space-y-3">
+                <ImageIcon className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-sm">No admin posts published yet.</p>
+                <button
+                  type="button"
+                  onClick={() => setShowCreateStudio(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  <ImagePlus className="w-4 h-4" />
+                  <span>+ Create Your First Post</span>
+                </button>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
