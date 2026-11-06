@@ -13,8 +13,7 @@ import {
   Moon,
   Menu,
   X,
-  Camera,
-  Plus
+  Camera
 } from 'lucide-react';
 import { setAdminSession, performAdminLogout } from '@/features/admin/auth';
 
@@ -154,47 +153,26 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
               {navItems.map((item) => {
                 const Icon = item.icon;
                 return (
-                  <div key={item.name} className="relative group">
-                    <Link
-                      href={item.href}
-                      onClick={() => {
-                        if (mobileSidebarOpen) setMobileSidebarOpen(false);
-                      }}
-                      className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-                        item.active
-                          ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20'
-                          : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <Icon className={`w-4 h-4 ${item.active ? 'text-slate-950' : 'text-slate-400'}`} />
-                        <span>{item.name}</span>
-                      </div>
-                      <div className="flex items-center gap-1.5">
-                        {item.name === 'Post Photos' && (
-                          <span
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              router.push('/admin/operations/photos?new=true');
-                              if (mobileSidebarOpen) setMobileSidebarOpen(false);
-                            }}
-                            title="Create new photo post (+)"
-                            className={`p-1 rounded-lg transition-all cursor-pointer ${
-                              item.active
-                                ? 'bg-slate-950/20 hover:bg-slate-950/40 text-slate-950'
-                                : 'hover:bg-amber-500/20 text-amber-400'
-                            }`}
-                          >
-                            <Plus className="w-3.5 h-3.5 stroke-[3]" />
-                          </span>
-                        )}
-                        {item.active && (
-                          <span className="w-2 h-2 rounded-full bg-slate-950 shadow-sm" />
-                        )}
-                      </div>
-                    </Link>
-                  </div>
+                  <Link
+                    key={item.name}
+                    href={item.href}
+                    onClick={() => {
+                      if (mobileSidebarOpen) setMobileSidebarOpen(false);
+                    }}
+                    className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+                      item.active
+                        ? 'bg-gradient-to-r from-amber-500 to-amber-600 text-slate-950 shadow-lg shadow-amber-500/20'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <Icon className={`w-4 h-4 ${item.active ? 'text-slate-950' : 'text-slate-400'}`} />
+                      <span>{item.name}</span>
+                    </div>
+                    {item.active && (
+                      <span className="w-2 h-2 rounded-full bg-slate-950 shadow-sm" />
+                    )}
+                  </Link>
                 );
               })}
             </nav>
