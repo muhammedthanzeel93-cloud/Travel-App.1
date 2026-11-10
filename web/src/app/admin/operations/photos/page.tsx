@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, FormEvent, ChangeEvent } from 'react';
 import Link from 'next/link';
 import { playChime } from '@/lib/soundAlert';
+import AdminUserProfileModal from '@/components/admin/AdminUserProfileModal';
 import {
   Camera,
   UploadCloud,
@@ -143,6 +144,7 @@ export default function AdminPhotosPage() {
   const [activeViewsPost, setActiveViewsPost] = useState<SocialPost | null>(null);
   const [viewsList, setViewsList] = useState<ReactionUser[]>([]);
   const [loadingViews, setLoadingViews] = useState(false);
+  const [inspectUserId, setInspectUserId] = useState<string | null>(null);
 
   const showNotification = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -782,28 +784,33 @@ export default function AdminPhotosPage() {
                   <div>
                     {/* User Profile Header */}
                     <div className="p-3.5 flex items-center justify-between border-b border-slate-800/60">
-                      <div className="flex items-center gap-2.5">
+                      <button
+                        type="button"
+                        onClick={() => post.user.id && setInspectUserId(post.user.id)}
+                        className="flex items-center gap-2.5 text-left group cursor-pointer"
+                        title="Click to inspect traveler profile dossier (Posts, Comments, Followers, Following)"
+                      >
                         {post.user.avatar ? (
                           <img
                             src={post.user.avatar}
                             alt=""
-                            className="w-8 h-8 rounded-full object-cover border border-slate-700"
+                            className="w-8 h-8 rounded-full object-cover border border-slate-700 group-hover:scale-105 transition-transform"
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs">
+                          <div className="w-8 h-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-slate-300 font-bold text-xs group-hover:scale-105 transition-transform">
                             <User className="w-4 h-4 text-slate-400" />
                           </div>
                         )}
                         <div>
-                          <div className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <div className="text-xs font-bold text-white flex items-center gap-1.5 group-hover:text-amber-300 transition-colors">
                             {post.user.name}
                             <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-500/10 text-blue-400 border border-blue-500/20">
                               {post.user.role || 'USER'}
                             </span>
                           </div>
-                          <div className="text-[11px] text-slate-400">{post.user.handle}</div>
+                          <div className="text-[11px] text-slate-400 group-hover:underline">{post.user.handle}</div>
                         </div>
-                      </div>
+                      </button>
 
                       <button
                         onClick={() => setDeleteTargetPost(post)}
@@ -1626,6 +1633,12 @@ export default function AdminPhotosPage() {
           </div>
         </div>
       )}
+
+      {/* Admin User Profile Dossier Modal */}
+      <AdminUserProfileModal
+        userId={inspectUserId}
+        onClose={() => setInspectUserId(null)}
+      />
     </div>
   );
 }

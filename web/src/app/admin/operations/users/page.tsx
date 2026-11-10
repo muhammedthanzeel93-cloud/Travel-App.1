@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { playChime } from '@/lib/soundAlert';
+import AdminUserProfileModal from '@/components/admin/AdminUserProfileModal';
 import {
   Users,
   User,
@@ -57,6 +58,7 @@ export default function AdminUsersPage() {
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<UserRecord | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [currentTime, setCurrentTime] = useState<number>(Date.now());
+  const [inspectUserId, setInspectUserId] = useState<string | null>(null);
 
   const playAlertSound = (type: 'success' | 'warning' = 'success') => {
     playChime(type, soundEnabled);
@@ -578,16 +580,21 @@ export default function AdminUsersPage() {
                         isSuperAdmin ? 'bg-amber-500/[0.03]' : isBlocked ? 'bg-rose-950/10' : ''
                       }`}
                     >
-                      {/* 1. User Avatar, Name & Username */}
+                      {/* 1. User Avatar, Name & Username (Click to open full profile dossier) */}
                       <td className="px-4 py-3.5">
-                        <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => setInspectUserId(user.id)}
+                          className="flex items-center gap-3 text-left group cursor-pointer"
+                          title="Click to view full user profile dossier (Posts, Comments, Followers, Following)"
+                        >
                           <img
                             src={
                               user.avatarUrl ||
                               'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=120&q=80'
                             }
                             alt={user.username}
-                            className={`w-9 h-9 rounded-full object-cover border-2 shrink-0 ${
+                            className={`w-9 h-9 rounded-full object-cover border-2 shrink-0 group-hover:scale-105 transition-transform ${
                               isAdminRole
                                 ? 'border-amber-500 shadow-md shadow-amber-500/20'
                                 : isUserRole
@@ -599,7 +606,7 @@ export default function AdminUsersPage() {
                           />
                           <div className="overflow-hidden">
                             <div className="flex items-center gap-1.5">
-                              <span className="font-bold text-white text-xs truncate">
+                              <span className="font-bold text-white text-xs truncate group-hover:text-amber-300 transition-colors">
                                 {user.name || user.username}
                               </span>
                               {isAdminRole && <Crown className="w-3 h-3 text-amber-400 shrink-0" />}
@@ -611,11 +618,11 @@ export default function AdminUsersPage() {
                                 </span>
                               )}
                             </div>
-                            <span className="text-[11px] text-amber-400 font-mono block truncate">
+                            <span className="text-[11px] text-amber-400 font-mono block truncate group-hover:underline">
                               @{user.username}
                             </span>
                           </div>
-                        </div>
+                        </button>
                       </td>
 
                       {/* 2. Role Badge */}
@@ -707,6 +714,16 @@ export default function AdminUsersPage() {
                       {/* 7. Actions: Block / Unblock & Delete */}
                       <td className="px-4 py-3.5 text-right whitespace-nowrap">
                         <div className="flex items-center justify-end gap-1.5">
+                          {/* Inspect Profile Button */}
+                          <button
+                            type="button"
+                            onClick={() => setInspectUserId(user.id)}
+                            title="Inspect User Profile Dossier (Posts, Comments, Followers, Following)"
+                            className="p-1.5 rounded-lg border bg-slate-900 hover:bg-amber-500/20 text-slate-400 hover:text-amber-400 border-slate-800 hover:border-amber-500/40 text-xs font-bold transition-all cursor-pointer"
+                          >
+                            <User className="w-3.5 h-3.5" />
+                          </button>
+
                           {/* Block / Unblock Button */}
                           <button
                             onClick={() => handleToggleBlock(user)}
@@ -818,6 +835,17 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Admin User Profile Dossier Modal */}
+      <AdminUserProfileModal
+        userId={inspectUserId}
+        onClose={() => setInspectUserId(null)}
+        onStatusChanged={(id, newStatus) => {
+          setUsers((prev) =>
+            prev.map((u) => (u.id === id ? { ...u, status: newStatus } : u))
+          );
+        }}
+      />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import mongoose from 'mongoose';
 import { User, IUser, UserRole } from './user.model.js';
+import { Post, PostComment } from '../social/social.model.js';
 import { AuthChallenge } from './authChallenge.model.js';
 import { consumeVerifiedOtp, createAndDispatchOtp, verifyOtp } from './otp.service.js';
 import { clearSessionCookie, getRequestToken, setSessionCookie } from './session.js';
@@ -386,6 +387,113 @@ export class AuthController {
       res.status(200).json({ success: true, status: user.status, message: 'User status updated.' });
     } catch {
       res.status(500).json({ success: false, message: 'Unable to update user status.' });
+    }
+  }
+
+  public static async getUserFullProfile(req: Request, res: Response): Promise<void> {
+    if (!requireDatabase(res)) return;
+    try {
+      const targetUserId = req.params.userId;
+      if (!targetUserId || !mongoose.isValidObjectId(targetUserId)) {
+        res.status(400).json({ success: false, message: 'Valid user ID is required.' });
+        return;
+      }
+
+      const user = await User.findById(targetUserId)
+        .select('-passwordHash -travelerPassport -agencyDetails')
+        .populate('followers', 'name username avatarUrl role email status')
+        .populate('following', 'name username avatarUrl role email status')
+        .lean();
+
+      if (!user) {
+        res.status(404).json({ success: false, message: 'User not found.' });
+        return;
+      }
+
+      const [userPosts, userComments] = await Promise.all([
+        Post.find({ userId: user._id })
+          .sort({ createdAt: -1 })
+          .select('images caption locationName city likesCount commentsCount viewsCount averageRating ratingsCount isAdminPost createdAt')
+          .lean(),
+        PostComment.find({ userId: user._id })
+          .sort({ createdAt: -1 })
+          .populate('postId', 'caption images locationName city')
+          .lean()
+      ]);
+
+      const totalLikesReceived = userPosts.reduce((acc: number, p: any) => acc + (p.likesCount || 0), 0);
+      const totalViewsReceived = userPosts.reduce((acc: number, p: any) => acc + (p.viewsCount || 0), 0);
+
+      res.status(200).json({
+        success: true,
+        profile: {
+          user: {
+            id: user._id.toString(),
+            username: user.username,
+            name: user.name,
+            email: user.email || '',
+            phone: user.phone || '',
+            role: user.role,
+            status: user.status,
+            avatarUrl: user.avatarUrl || '',
+            bio: user.bio || '',
+            createdAt: user.createdAt,
+            lastActiveAt: user.lastActiveAt || null,
+            followersCount: Array.isArray(user.followers) ? user.followers.length : (user.followersCount || 0),
+            followingCount: Array.isArray(user.following) ? user.following.length : (user.followingCount || 0),
+            followers: Array.isArray(user.followers) ? user.followers.map((f: any) => ({
+              id: f._id ? f._id.toString() : String(f),
+              name: f.name || 'Traveler',
+              username: f.username || 'user',
+              avatarUrl: f.avatarUrl || '',
+              role: f.role || 'USER',
+              email: f.email || '',
+              status: f.status || 'ACTIVE'
+            })) : [],
+            following: Array.isArray(user.following) ? user.following.map((f: any) => ({
+              id: f._id ? f._id.toString() : String(f),
+              name: f.name || 'Traveler',
+              username: f.username || 'user',
+              avatarUrl: f.avatarUrl || '',
+              role: f.role || 'USER',
+              email: f.email || '',
+              status: f.status || 'ACTIVE'
+            })) : []
+          },
+          stats: {
+            postsCount: userPosts.length,
+            commentsCount: userComments.length,
+            totalLikesReceived,
+            totalViewsReceived
+          },
+          posts: userPosts.map((p: any) => ({
+            id: p._id.toString(),
+            images: p.images || [],
+            caption: p.caption,
+            locationName: p.locationName || '',
+            city: p.city || '',
+            likesCount: p.likesCount || 0,
+            commentsCount: p.commentsCount || 0,
+            viewsCount: p.viewsCount || 0,
+            averageRating: p.averageRating || 0,
+            ratingsCount: p.ratingsCount || 0,
+            isAdminPost: Boolean(p.isAdminPost),
+            createdAt: p.createdAt
+          })),
+          comments: userComments.map((c: any) => ({
+            id: c._id.toString(),
+            postId: c.postId?._id ? c.postId._id.toString() : (c.postId ? c.postId.toString() : ''),
+            postCaption: c.postId?.caption || '',
+            postImage: c.postId?.images?.[0] || '',
+            postLocation: [c.postId?.locationName, c.postId?.city].filter(Boolean).join(', '),
+            text: c.text,
+            createdAt: c.createdAt
+          }))
+        }
+      });
+    } catch (err: any) {
+      console.error('[Admin Profile] Failed:', err);
+      res.status(500).json({ success: false, message: 'Unable to fetch user full profile.' });
     }
   }
 }

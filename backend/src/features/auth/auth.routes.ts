@@ -27,6 +27,7 @@ router.post('/logout', AuthController.logout);
 
 // User Management (Admin Console - Strictly Protected by Super Admin RBAC)
 router.get('/users', authenticateToken, requireSuperAdmin, AuthController.getAllUsers);
+router.get('/users/:userId/full-profile', authenticateToken, requireSuperAdmin, AuthController.getUserFullProfile);
 router.get('/active-count', authenticateToken, requireSuperAdmin, AuthController.getActiveUserCount);
 router.post('/users/delete', authenticateToken, requireSuperAdmin, AuthController.deleteUser);
 router.post('/users/toggle-block', authenticateToken, requireSuperAdmin, AuthController.toggleBlockUser);
