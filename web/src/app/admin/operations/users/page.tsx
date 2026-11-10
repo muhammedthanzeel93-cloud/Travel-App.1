@@ -271,7 +271,7 @@ export default function AdminUsersPage() {
       </div>
 
       {/* 5 Role Metric Overview Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3.5">
         {/* Card 1: Total All Roles */}
         <div
           onClick={() => { setRoleFilter('ALL'); setStatusFilter('ALL'); }}
@@ -429,7 +429,7 @@ export default function AdminUsersPage() {
           </div>
 
           {/* Status Filter */}
-          <div className="flex items-center gap-1.5 self-end sm:self-auto">
+          <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto justify-start sm:justify-end">
             <button
               onClick={() => setStatusFilter('ALL')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
@@ -551,8 +551,8 @@ export default function AdminUsersPage() {
             <p className="text-[11px]">Try clearing search or selecting "All Roles".</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-left">
+          <div className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
+            <table className="w-full min-w-[700px] text-xs text-left">
               <thead className="text-[11px] font-bold uppercase tracking-wider text-slate-400 bg-slate-950/70 border-b border-slate-800">
                 <tr>
                   <th className="px-4 py-3.5">User Details</th>
@@ -759,8 +759,8 @@ export default function AdminUsersPage() {
 
       {/* Safety Confirmation Modal for Permanent User Deletion */}
       {deleteConfirmUser && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-[#0e131f] border border-rose-500/40 rounded-2xl p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#0e131f] border border-rose-500/40 rounded-2xl p-4 sm:p-6 shadow-2xl space-y-4 max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-rose-500/20 border border-rose-500/30 text-rose-400 flex items-center justify-center shrink-0">
                 <AlertTriangle className="w-5 h-5" />

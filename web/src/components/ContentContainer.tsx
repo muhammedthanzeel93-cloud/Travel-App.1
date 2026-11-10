@@ -11,13 +11,13 @@ export default function ContentContainer({
 
   // Admin Operations Console requires full edge-to-edge layout with no wrapper padding
   if (pathname?.startsWith('/admin/operations')) {
-    return <div className="w-full h-full min-h-screen">{children}</div>;
+    return <div className="w-full h-full min-h-[100dvh]">{children}</div>;
   }
 
   // Auth & Admin Login pages get centered presentation
   if (pathname === '/' || pathname === '/admin') {
     return (
-      <div className="flex-1 w-full flex items-center justify-center min-h-screen p-4 sm:p-6">
+      <div className="flex-1 w-full flex items-center justify-center min-h-[100dvh] p-4 sm:p-6">
         {children}
       </div>
     );

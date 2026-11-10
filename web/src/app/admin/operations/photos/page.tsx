@@ -666,8 +666,8 @@ export default function AdminPhotosPage() {
                     </div>
 
                     {/* Engagement Actions Bar (Click to inspect likers, comments, reposters, views) */}
-                    <div className="px-4 py-3 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between">
-                      <div className="flex items-center gap-4">
+                    <div className="px-4 py-3 bg-slate-950/50 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex flex-wrap items-center gap-3 sm:gap-4">
                         {/* Views Count (Click to inspect travelers who viewed) */}
                         <button
                           type="button"
@@ -716,7 +716,7 @@ export default function AdminPhotosPage() {
                         </button>
                       </div>
 
-                      <span className="text-[11px] font-bold text-amber-500/80">ADMIN POST</span>
+                      <span className="text-[11px] font-bold text-amber-500/80 shrink-0">ADMIN POST</span>
                     </div>
                   </div>
                 ))}
@@ -864,8 +864,8 @@ export default function AdminPhotosPage() {
                   </div>
 
                   {/* Actions Bar (Click to inspect likers, comments, reposters, views) */}
-                  <div className="px-3.5 py-2.5 bg-slate-950/50 border-t border-slate-800/80 flex items-center justify-between text-xs text-slate-400">
-                    <div className="flex items-center gap-3">
+                  <div className="px-3.5 py-2.5 bg-slate-950/50 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+                    <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
                       {/* Total Views (Click to inspect travelers who viewed) */}
                       <button
                         type="button"
@@ -909,7 +909,7 @@ export default function AdminPhotosPage() {
                       </button>
                     </div>
 
-                    <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1">
+                    <span className="text-[10px] font-semibold text-slate-500 flex items-center gap-1 shrink-0">
                       <Eye className="w-3 h-3 text-slate-400" /> View Only
                     </span>
                   </div>
@@ -922,8 +922,8 @@ export default function AdminPhotosPage() {
 
       {/* LIKERS MODAL (Who liked this post) */}
       {activeLikesPost && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[88dvh] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400">
@@ -944,7 +944,7 @@ export default function AdminPhotosPage() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+            <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] p-3.5 sm:p-4 space-y-2.5">
               {loadingLikes ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   <RefreshCw className="w-5 h-5 animate-spin mx-auto text-amber-400 mb-2" />
@@ -1002,8 +1002,8 @@ export default function AdminPhotosPage() {
 
       {/* REPOSTERS MODAL (Who reposted this post) */}
       {activeRepostsPost && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[80vh] shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[88dvh] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400">
@@ -1024,7 +1024,7 @@ export default function AdminPhotosPage() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+            <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] p-3.5 sm:p-4 space-y-2.5">
               {loadingReposts ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   <RefreshCw className="w-5 h-5 animate-spin mx-auto text-emerald-400 mb-2" />
@@ -1082,8 +1082,8 @@ export default function AdminPhotosPage() {
 
       {/* COMMENTS MODAL / DRAWER (View-Only for Admins) */}
       {activeCommentsPost && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[88dvh] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -1104,7 +1104,7 @@ export default function AdminPhotosPage() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] p-3.5 sm:p-4 space-y-3">
               {loadingComments ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   <RefreshCw className="w-5 h-5 animate-spin mx-auto text-amber-400 mb-2" />
@@ -1176,8 +1176,8 @@ export default function AdminPhotosPage() {
 
       {/* POST VIEWERS MODAL (Who viewed this post) */}
       {activeViewsPost && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b0f19] border border-cyan-500/30 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#0b0f19] border border-cyan-500/30 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[88dvh] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
@@ -1199,7 +1199,7 @@ export default function AdminPhotosPage() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+            <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] p-3.5 sm:p-4 space-y-2.5">
               {loadingViews ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   <RefreshCw className="w-5 h-5 animate-spin mx-auto text-cyan-400 mb-2" />
@@ -1280,8 +1280,8 @@ export default function AdminPhotosPage() {
 
       {/* REVIEWS & RATINGS MODAL (Who rated this post) */}
       {activeRatingsPost && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b0f19] border border-amber-500/30 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[85vh] shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#0b0f19] border border-amber-500/30 rounded-2xl w-full max-w-lg overflow-hidden flex flex-col max-h-[88dvh] shadow-2xl">
             <div className="p-4 border-b border-slate-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400">
@@ -1306,7 +1306,7 @@ export default function AdminPhotosPage() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-2.5">
+            <div className="flex-1 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] p-3.5 sm:p-4 space-y-2.5">
               {loadingRatings ? (
                 <div className="p-8 text-center text-slate-400 text-xs">
                   <RefreshCw className="w-5 h-5 animate-spin mx-auto text-amber-400 mb-2" />
@@ -1383,8 +1383,8 @@ export default function AdminPhotosPage() {
 
       {/* DELETE CONFIRMATION MODAL (Admin Moderation) */}
       {deleteTargetPost && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-2xl">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-[#0b0f19] border border-slate-800 rounded-2xl w-full max-w-md p-4 sm:p-6 space-y-4 shadow-2xl max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             <div className="flex items-center gap-3 text-rose-400">
               <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center">
                 <Trash2 className="w-5 h-5 text-rose-400" />
@@ -1424,8 +1424,8 @@ export default function AdminPhotosPage() {
       )}
       {/* CREATE OFFICIAL ADMIN PHOTO POST POPUP MODAL */}
       {isCreateModalOpen && (
-        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-[#0b0f19] border border-amber-500/40 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh] my-auto animate-in fade-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
+          <div className="bg-[#0b0f19] border border-amber-500/40 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl flex flex-col max-h-[92dvh] my-auto animate-in fade-in zoom-in-95 duration-200">
             {/* Modal Header */}
             <div className="p-4 sm:p-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/60">
               <div className="flex items-center gap-3">
@@ -1453,7 +1453,7 @@ export default function AdminPhotosPage() {
             </div>
 
             {/* Modal Form Body */}
-            <form onSubmit={handlePublishAdminPost} className="p-5 overflow-y-auto space-y-5">
+            <form onSubmit={handlePublishAdminPost} className="p-4 sm:p-5 overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch] space-y-4 sm:space-y-5">
               {/* Photo Upload Section */}
               <div className="space-y-2">
                 <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
@@ -1490,7 +1490,7 @@ export default function AdminPhotosPage() {
                         Add direct image links (https://...)
                       </p>
                     </div>
-                    <div className="flex gap-2 mt-3">
+                    <div className="flex flex-col sm:flex-row gap-2 mt-3">
                       <input
                         type="url"
                         value={manualImageUrl}
@@ -1501,7 +1501,7 @@ export default function AdminPhotosPage() {
                       <button
                         type="button"
                         onClick={handleAddUrlImage}
-                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg transition-colors cursor-pointer"
+                        className="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-xs font-bold text-amber-400 rounded-lg transition-colors cursor-pointer shrink-0"
                       >
                         Add URL
                       </button>
@@ -1556,7 +1556,7 @@ export default function AdminPhotosPage() {
               </div>
 
               {/* Location & Traveler Rating row */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
                 {/* Location Name */}
                 <div className="space-y-1.5">
                   <label className="block text-xs font-semibold text-slate-300 flex items-center gap-1.5">
@@ -1605,18 +1605,18 @@ export default function AdminPhotosPage() {
               </div>
 
               {/* Modal Footer */}
-              <div className="flex justify-end items-center gap-3 pt-3 border-t border-slate-800">
+              <div className="flex flex-col-reverse sm:flex-row justify-end items-stretch sm:items-center gap-2 sm:gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
                   onClick={() => setIsCreateModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-800 transition-colors cursor-pointer"
+                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 text-xs font-semibold border border-slate-800 transition-colors cursor-pointer text-center"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || uploadedImages.length === 0 || !caption.trim()}
-                  className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all cursor-pointer"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold text-xs shadow-lg shadow-amber-500/20 disabled:opacity-50 transition-all cursor-pointer"
                 >
                   <UploadCloud className="w-4 h-4" />
                   {isSubmitting ? 'Publishing Post…' : 'Publish Admin Photo Post'}

@@ -96,9 +96,9 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
   }
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden bg-[#060810] flex flex-col lg:flex-row text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950">
+    <div className="min-h-[100dvh] lg:h-screen lg:overflow-hidden bg-[#060810] flex flex-col lg:flex-row text-slate-100 font-sans selection:bg-amber-500 selection:text-slate-950">
       {/* Mobile Top Bar */}
-      <div className="lg:hidden flex items-center justify-between p-4 bg-[#090d16] border-b border-slate-800 sticky top-0 z-50">
+      <div className="lg:hidden flex items-center justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] bg-[#090d16] border-b border-slate-800 sticky top-0 z-50">
         <div className="flex items-center gap-3">
           <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 via-rose-500 to-amber-400 flex items-center justify-center shadow-lg shadow-amber-500/20">
             <ShieldAlert className="w-5 h-5 text-white" />
@@ -107,7 +107,8 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
         </div>
         <button
           onClick={() => setMobileSidebarOpen(!mobileSidebarOpen)}
-          className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer"
+          className="p-2 rounded-lg bg-slate-800 text-slate-300 hover:text-white cursor-pointer active:scale-95 transition-transform"
+          aria-label="Toggle navigation menu"
         >
           {mobileSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -123,7 +124,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
 
       {/* Left Sidebar (Desktop Fixed Sticky / Mobile Drawer) */}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 w-64 xl:w-72 bg-[#090d16] border-r border-slate-800/80 flex flex-col justify-between p-4 transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 lg:overflow-y-auto ${
+        className={`fixed inset-y-0 left-0 z-40 w-64 xl:w-72 bg-[#090d16] border-r border-slate-800/80 flex flex-col justify-between p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[calc(1rem+env(safe-area-inset-bottom,0px))] overflow-y-auto overscroll-contain max-h-[100dvh] [-webkit-overflow-scrolling:touch] transition-transform duration-200 lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:shrink-0 ${
           mobileSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
@@ -230,7 +231,7 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
       {/* Confirmation Modal for Logout */}
       {showLogoutConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
-          <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4 text-center">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-3xl p-6 shadow-2xl space-y-4 text-center max-h-[90dvh] overflow-y-auto overscroll-contain [-webkit-overflow-scrolling:touch]">
             <div className="w-14 h-14 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto">
               <LogOut className="w-7 h-7" />
             </div>
@@ -274,8 +275,8 @@ export default function OperationsLayout({ children }: { children: React.ReactNo
         </div>
       )}
 
-      {/* Right Main Content Area (Independently Scrollable) */}
-      <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 lg:h-screen lg:overflow-y-auto">
+      {/* Right Main Content Area (Independently Scrollable with Safe Area Support) */}
+      <main className="flex-1 min-w-0 p-3.5 sm:p-6 lg:p-8 lg:h-screen lg:overflow-y-auto pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
         {children}
       </main>
     </div>
